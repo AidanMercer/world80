@@ -17,7 +17,7 @@ ShellRoot {
             property var modelData
             screen: modelData
 
-            WlrLayershell.namespace: "quickshell:bar"
+            WlrLayershell.namespace: "quickshell-bar"
 
             anchors {
                 top: true
@@ -30,39 +30,11 @@ ShellRoot {
             component Bubble: Rectangle {
                 height: 32
                 radius: 16
-                color: Qt.rgba(0.07, 0.08, 0.12, 0.55)
-                border.color: Qt.rgba(1, 1, 1, 0.08)
+                color: Qt.rgba(0.1, 0.1, 0.14, 0.22)
+                border.color: Qt.rgba(1, 1, 1, 0.18)
                 border.width: 1
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.leftMargin: parent.radius
-                    anchors.rightMargin: parent.radius
-                    anchors.topMargin: 1
-                    height: 1
-                    color: Qt.rgba(1, 1, 1, 0.10)
-                }
             }
 
-            Bubble {
-                id: clockBubble
-                anchors.left: parent.left
-                anchors.leftMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                width: clockText.implicitWidth + 24
-
-                Text {
-                    id: clockText
-                    anchors.centerIn: parent
-                    text: Qt.formatDateTime(clock.date, "HH:mm")
-                    color: "#e6e6f0"
-                    font.pixelSize: 14
-                    font.family: "monospace"
-                    font.weight: Font.Medium
-                }
-            }
 
             Bubble {
                 id: wsBubble
@@ -125,14 +97,35 @@ ShellRoot {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                width: dateText.implicitWidth + 24
+                width: dateRow.width + 24
 
-                Text {
-                    id: dateText
+                Row {
+                    id: dateRow
                     anchors.centerIn: parent
-                    text: Qt.formatDateTime(clock.date, "ddd, MMM d")
-                    color: "#a8a8b8"
-                    font.pixelSize: 13
+                    spacing: 10
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Qt.formatDateTime(clock.date, "HH:mm")
+                        color: "#e6e6f0"
+                        font.pixelSize: 14
+                        font.family: "monospace"
+                        font.weight: Font.Medium
+                    }
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 1
+                        height: 14
+                        color: Qt.rgba(1, 1, 1, 0.15)
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Qt.formatDateTime(clock.date, "ddd, MMM d")
+                        color: "#a8a8b8"
+                        font.pixelSize: 13
+                    }
                 }
             }
         }
