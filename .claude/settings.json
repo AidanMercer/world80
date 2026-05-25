@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(qs list *)",
+      "Bash(qs log *)",
+      "Bash(fc-list *)",
+      "Bash(pacman -Q*)"
+    ]
+  }
+}
