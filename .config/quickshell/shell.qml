@@ -291,7 +291,7 @@ ShellRoot {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: netPopup.visible = !netPopup.visible
+                    onClicked: netPopup.open = !netPopup.open
                 }
             }
 
@@ -337,7 +337,7 @@ ShellRoot {
                         if (mouse.button === Qt.RightButton) {
                             if (audioBubble.sink) audioBubble.sink.audio.muted = !audioBubble.sink.audio.muted
                         } else {
-                            audioPopup.visible = !audioPopup.visible
+                            audioPopup.open = !audioPopup.open
                         }
                     }
 
@@ -352,6 +352,18 @@ ShellRoot {
                 }
             }
 
+            HyprlandFocusGrab {
+                windows: [audioPopup]
+                active: audioPopup.open
+                onCleared: audioPopup.open = false
+            }
+
+            HyprlandFocusGrab {
+                windows: [netPopup]
+                active: netPopup.open
+                onCleared: netPopup.open = false
+            }
+
             PopupWindow {
                 id: audioPopup
                 anchor.window: bar
@@ -359,14 +371,46 @@ ShellRoot {
                 anchor.rect.y: bar.implicitHeight + 4
                 implicitWidth: 320
                 implicitHeight: popupContent.implicitHeight + 32
-                visible: false
+                property bool open: false
+                visible: open || audioExitTrans.running
                 color: "transparent"
+
+                Item {
+                    id: audioMorph
+                    anchors.fill: parent
+                    opacity: 0
+                    scale: 0.78
+                    transformOrigin: Item.TopRight
+
+                    states: State {
+                        name: "shown"
+                        when: audioPopup.open
+                        PropertyChanges { target: audioMorph; opacity: 1; scale: 1 }
+                    }
+
+                    transitions: [
+                        Transition {
+                            to: "shown"
+                            ParallelAnimation {
+                                NumberAnimation { property: "opacity"; duration: 220; easing.type: Easing.OutCubic }
+                                SpringAnimation { property: "scale"; spring: 3; damping: 0.32; epsilon: 0.001 }
+                            }
+                        },
+                        Transition {
+                            id: audioExitTrans
+                            from: "shown"
+                            ParallelAnimation {
+                                NumberAnimation { property: "opacity"; duration: 180; easing.type: Easing.InCubic }
+                                NumberAnimation { property: "scale"; duration: 180; easing.type: Easing.InCubic }
+                            }
+                        }
+                    ]
 
                 Rectangle {
                     anchors.fill: parent
                     radius: 20
-                    color: Qt.rgba(0.07, 0.07, 0.10, 0.80)
-                    border.color: Qt.rgba(1, 1, 1, 0.14)
+                    color: Qt.rgba(0.10, 0.10, 0.14, 0.22)
+                    border.color: Qt.rgba(1, 1, 1, 0.18)
                     border.width: 1
 
                     Rectangle {
@@ -580,6 +624,7 @@ ShellRoot {
                         }
                     }
                 }
+                }
             }
 
             PopupWindow {
@@ -589,13 +634,14 @@ ShellRoot {
                 anchor.rect.y: bar.implicitHeight + 2
                 implicitWidth: 320
                 implicitHeight: netPopupContent.implicitHeight + 24
-                visible: false
+                property bool open: false
+                visible: open || netExitTrans.running
                 color: "transparent"
 
                 property var networks: []
 
-                onVisibleChanged: {
-                    if (visible) wifiListProc.running = true
+                onOpenChanged: {
+                    if (open) wifiListProc.running = true
                 }
 
                 // nmcli -t escapes ':' inside values as '\:' — split on unescaped colons
@@ -664,15 +710,46 @@ ShellRoot {
 
                 Timer {
                     interval: 4000
-                    running: netPopup.visible
+                    running: netPopup.open
                     repeat: true
                     onTriggered: wifiListProc.running = true
                 }
 
+                Item {
+                    id: netMorph
+                    anchors.fill: parent
+                    opacity: 0
+                    scale: 0.78
+                    transformOrigin: Item.TopRight
+
+                    states: State {
+                        name: "shown"
+                        when: netPopup.open
+                        PropertyChanges { target: netMorph; opacity: 1; scale: 1 }
+                    }
+
+                    transitions: [
+                        Transition {
+                            to: "shown"
+                            ParallelAnimation {
+                                NumberAnimation { property: "opacity"; duration: 220; easing.type: Easing.OutCubic }
+                                SpringAnimation { property: "scale"; spring: 3; damping: 0.32; epsilon: 0.001 }
+                            }
+                        },
+                        Transition {
+                            id: netExitTrans
+                            from: "shown"
+                            ParallelAnimation {
+                                NumberAnimation { property: "opacity"; duration: 180; easing.type: Easing.InCubic }
+                                NumberAnimation { property: "scale"; duration: 180; easing.type: Easing.InCubic }
+                            }
+                        }
+                    ]
+
                 Rectangle {
                     anchors.fill: parent
-                    radius: 16
-                    color: Qt.rgba(0.08, 0.08, 0.11, 0.92)
+                    radius: 20
+                    color: Qt.rgba(0.10, 0.10, 0.14, 0.22)
                     border.color: Qt.rgba(1, 1, 1, 0.18)
                     border.width: 1
 
@@ -820,6 +897,7 @@ ShellRoot {
                             topPadding: 4
                         }
                     }
+                }
                 }
             }
         }
