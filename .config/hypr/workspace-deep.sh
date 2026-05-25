@@ -10,13 +10,22 @@
 # independent depth to scroll through.
 #
 # Usage:
-#   workspace-deep.sh +1   # deeper / next
-#   workspace-deep.sh -1   # shallower / previous
+#   workspace-deep.sh +1        # switch deeper / next
+#   workspace-deep.sh -1        # switch shallower / previous
+#   workspace-deep.sh +1 move   # carry the active window deeper (focus follows)
+#   workspace-deep.sh -1 move   # carry the active window shallower
 
 case "${1:-+1}" in
   -*) step=-1 ;;
   *)  step=1  ;;
 esac
+
+# "move" carries the focused window along; anything else just switches view.
+if [[ "${2:-}" == move ]]; then
+    action="movetoworkspace"
+else
+    action="workspace"
+fi
 
 mon=$(hyprctl monitors -j)
 ws=$(hyprctl workspaces -j)
@@ -41,4 +50,4 @@ while (( cand >= 1 )) && is_blocked "$cand"; do
     cand=$((cand + step))
 done
 
-(( cand >= 1 )) && hyprctl dispatch workspace "$cand"
+(( cand >= 1 )) && hyprctl dispatch "$action" "$cand"
