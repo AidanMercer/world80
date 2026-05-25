@@ -29,12 +29,26 @@ Bubble {
     readonly property int _desktopEntriesKeepAlive: DesktopEntries.applications.values.length
 
     // Hyprland.workspaces and .monitors auto-populate, but Hyprland.toplevels
-    // does NOT: it stays empty until refreshToplevels() is called or a window
-    // event fires. At login the bar starts with windows already open and no
-    // event incoming, so without this kick every slot reads as unoccupied and
-    // shows a dot — no app icons ever appear. One refresh seeds the model;
-    // Hyprland's open/close/move events keep it in sync afterward.
+    // does NOT: it stays empty until refreshToplevels() is called. At login the
+    // bar starts with windows already open and no event incoming, so without
+    // this kick every slot reads as unoccupied and shows a dot — no app icons.
+    // Events DO add/remove toplevels in the model on their own, but a window
+    // opened via `openwindow` arrives with an incomplete lastIpcObject (no
+    // class yet) and is never refilled on its own — so we re-query on each
+    // window lifecycle event to keep every window's class populated.
     Component.onCompleted: Hyprland.refreshToplevels()
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            switch (event.name) {
+            case "openwindow":
+            case "closewindow":
+            case "movewindow":
+            case "movewindowv2":
+                Hyprland.refreshToplevels()
+            }
+        }
+    }
 
     // Resolve a window class to an icon URL, degrading gracefully:
     //   desktop-entry icon  ->  the class name as an icon  ->  generic app
@@ -44,6 +58,20 @@ Bubble {
         const entry = DesktopEntries.heuristicLookup(cls)
         const name = (entry && entry.icon) ? entry.icon : cls.toLowerCase()
         return Quickshell.iconPath(name, "application-x-executable")
+    }
+
+    // Choose the single icon to show for a workspace's windows. Scan newest
+    // first for one that has a class — a just-opened window can briefly lack
+    // one (see refreshToplevels note above), so skipping it falls back to an
+    // older window's icon instead of blanking the slot. Generic app icon if
+    // nothing has a class yet, so an occupied slot is never empty.
+    function iconForWindows(wins) {
+        for (let i = wins.length - 1; i >= 0; i--) {
+            const cls = wins[i].lastIpcObject?.class ?? ""
+            if (cls)
+                return iconForClass(cls)
+        }
+        return Quickshell.iconPath("application-x-executable")
     }
 
     // Sliding highlight behind the active workspace. Hidden when the active
@@ -86,9 +114,9 @@ Bubble {
                 readonly property var windowsHere: Hyprland.toplevels.values
                     .filter(t => (t.workspace?.id ?? -1) === wsId)
                 readonly property bool isOccupied: windowsHere.length > 0
-                // Icon of the most recently added window on this workspace.
+                // A single representative icon for the windows here.
                 readonly property string iconSource: isOccupied
-                    ? root.iconForClass(windowsHere[windowsHere.length - 1].lastIpcObject?.class ?? "")
+                    ? root.iconForWindows(windowsHere)
                     : ""
 
                 width: root.slotSize
