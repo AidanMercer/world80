@@ -1,0 +1,113 @@
+# kdeglobals — hand-picked dark color scheme for Qt/KDE apps (Dolphin, etc.)
+#
+# Why this file exists:
+#   Dolphin is a Qt6/KDE app. The GTK portal dark-mode wiring does NOT touch Qt.
+#   Qt 6.5+ will follow the portal's "prefer-dark" hint on its own, but with no
+#   KDE color scheme defined it only builds a PARTIAL palette at startup — the
+#   window goes dark while text/foreground roles stay black. Toggling light->dark
+#   forces a full palette rebuild, which is why the toggle "fixes" it.
+#
+#   Defining a complete scheme here means KDE apps read every color role
+#   deterministically at startup (via KColorScheme), so there's no half-built
+#   palette and no black text. Colors mirror quickshell/modules/common/Theme.qml.
+#
+# Color roles use "R,G,B" (0-255). The file-list text in Dolphin is driven by
+# [Colors:View] ForegroundNormal — that was the role rendering black at startup.
+
+[General]
+ColorScheme=CustomDark
+
+[Colors:View]
+BackgroundNormal=22,22,28
+BackgroundAlternate=28,28,36
+ForegroundNormal=230,230,240
+ForegroundInactive=168,168,184
+ForegroundActive=168,181,232
+ForegroundLink=168,181,232
+ForegroundVisited=200,165,232
+ForegroundNegative=232,142,142
+ForegroundNeutral=232,201,142
+ForegroundPositive=142,232,160
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[Colors:Window]
+BackgroundNormal=26,26,34
+BackgroundAlternate=32,32,42
+ForegroundNormal=230,230,240
+ForegroundInactive=168,168,184
+ForegroundActive=168,181,232
+ForegroundLink=168,181,232
+ForegroundVisited=200,165,232
+ForegroundNegative=232,142,142
+ForegroundNeutral=232,201,142
+ForegroundPositive=142,232,160
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[Colors:Button]
+BackgroundNormal=38,38,48
+BackgroundAlternate=44,44,56
+ForegroundNormal=230,230,240
+ForegroundInactive=168,168,184
+ForegroundActive=168,181,232
+ForegroundLink=168,181,232
+ForegroundVisited=200,165,232
+ForegroundNegative=232,142,142
+ForegroundNeutral=232,201,142
+ForegroundPositive=142,232,160
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[Colors:Selection]
+BackgroundNormal=85,96,168
+BackgroundAlternate=72,82,148
+ForegroundNormal=240,240,248
+ForegroundInactive=200,205,235
+ForegroundActive=255,255,255
+ForegroundLink=200,210,245
+ForegroundVisited=210,190,240
+ForegroundNegative=255,180,180
+ForegroundNeutral=245,220,170
+ForegroundPositive=180,245,195
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[Colors:Tooltip]
+BackgroundNormal=32,32,42
+BackgroundAlternate=38,38,48
+ForegroundNormal=230,230,240
+ForegroundInactive=168,168,184
+ForegroundActive=168,181,232
+ForegroundLink=168,181,232
+ForegroundVisited=200,165,232
+ForegroundNegative=232,142,142
+ForegroundNeutral=232,201,142
+ForegroundPositive=142,232,160
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[Colors:Complementary]
+BackgroundNormal=20,20,26
+BackgroundAlternate=26,26,34
+ForegroundNormal=230,230,240
+ForegroundInactive=168,168,184
+ForegroundActive=168,181,232
+ForegroundLink=168,181,232
+ForegroundVisited=200,165,232
+ForegroundNegative=232,142,142
+ForegroundNeutral=232,201,142
+ForegroundPositive=142,232,160
+DecorationFocus=168,181,232
+DecorationHover=138,153,232
+
+[WM]
+activeBackground=26,26,34
+activeForeground=230,230,240
+inactiveBackground=22,22,28
+inactiveForeground=168,168,184
+activeBlend=168,181,232
+inactiveBlend=168,168,184
+
+[Icons]
+Theme=breeze-dark
