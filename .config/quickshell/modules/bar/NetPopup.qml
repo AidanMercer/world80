@@ -148,10 +148,11 @@ PopupWindow {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root.connType === "wifi" ? "📶"
-                            : root.connType === "ethernet" ? "🌐"
-                            : "📡"
-                        font.pixelSize: 16
+                        text: root.connType === "wifi" ? String.fromCodePoint(0xF05A9)
+                            : root.connType === "ethernet" ? String.fromCodePoint(0xF0200)
+                            : String.fromCodePoint(0xF05AA)
+                        font.family: Theme.icon
+                        font.pixelSize: 18
                         color: Theme.textPrimary
                     }
 
@@ -235,7 +236,7 @@ PopupWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: sigBar.left
                             anchors.rightMargin: 10
-                            text: netRow.modelData.ssid + (netRow.modelData.security ? "  🔒" : "")
+                            text: netRow.modelData.ssid + (netRow.modelData.security ? "  " + String.fromCodePoint(0xF033E) : "")
                             color: netRow.modelData.inUse ? Theme.textBright : Theme.textTertiary
                             font.pixelSize: 12
                             elide: Text.ElideRight

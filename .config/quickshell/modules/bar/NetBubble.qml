@@ -9,6 +9,11 @@ Bubble {
     property string connType: "none"
     property string connName: ""
 
+    // Symbols Nerd Font glyphs (codepoints avoid mojibake in source)
+    readonly property string iconWifi: String.fromCodePoint(0xF05A9)      // nf-md-wifi
+    readonly property string iconEthernet: String.fromCodePoint(0xF0200)  // nf-md-ethernet
+    readonly property string iconOffline: String.fromCodePoint(0xF05AA)   // nf-md-wifi_off
+
     signal popupToggleRequested()
 
     function refresh() {
@@ -47,11 +52,12 @@ Bubble {
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: root.connType === "wifi" ? "📶"
-                : root.connType === "ethernet" ? "🌐"
-                : "📡"
+            text: root.connType === "wifi" ? root.iconWifi
+                : root.connType === "ethernet" ? root.iconEthernet
+                : root.iconOffline
             color: Theme.textPrimary
-            font.pixelSize: 13
+            font.family: Theme.icon
+            font.pixelSize: 15
         }
 
         Text {

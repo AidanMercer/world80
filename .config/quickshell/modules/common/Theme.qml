@@ -35,4 +35,5 @@ QtObject {
     readonly property int popupRadius: 20
 
     readonly property string mono: "monospace"
+    readonly property string icon: "Symbols Nerd Font"
 }
