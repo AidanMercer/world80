@@ -11,12 +11,20 @@ Bubble {
     // The Hyprland monitor this bar lives on; each bar passes its own.
     required property var monitor
 
-    // A fixed strip of workspaces 1..10 (no paging) — each slot shows the
-    // icon of an app living on that workspace, or a small dot when empty.
+    // A strip of `wsCount` workspaces that PAGES in blocks of 10: page 1 is
+    // 1..10, page 2 is 11..20, etc. Each slot shows the icon of an app living
+    // on that workspace, or a small dot when empty.
     readonly property int wsCount: 10
     // This monitor's active workspace — not the global focus — so each
     // monitor's bar reflects the workspace it is actually showing.
     readonly property int activeWsId: monitor?.activeWorkspace?.id ?? 1
+    // The first workspace id of the page the active workspace lives on.
+    // floor((id-1)/10)*10 + 1 maps 1..10 -> 1, 11..20 -> 11, and so on, so the
+    // strip slides to the right block of ten when you scroll past 10. Special
+    // / scratch workspaces have negative ids; fall back to page 1 for those.
+    readonly property int pageBase: activeWsId >= 1
+        ? Math.floor((activeWsId - 1) / wsCount) * wsCount + 1
+        : 1
 
     readonly property int slotSize: 22
     readonly property int slotSpacing: 4
@@ -85,16 +93,17 @@ Bubble {
                     : Quickshell.iconPath("application-x-executable")
     }
 
-    // Sliding highlight behind the active workspace. Hidden when the active
-    // workspace is outside the 1..10 strip (e.g. a special/scratch workspace).
+    // Sliding highlight behind the active workspace. Hidden for special /
+    // scratch workspaces (negative ids), which sit on no page.
     Rectangle {
         id: activeIndicator
-        visible: root.activeWsId >= 1 && root.activeWsId <= root.wsCount
+        visible: root.activeWsId >= 1
         width: root.slotSize
         height: root.slotSize
         radius: height / 2
         anchors.verticalCenter: parent.verticalCenter
-        x: wsRow.x + (root.activeWsId - 1) * (root.slotSize + root.slotSpacing)
+        // Offset within the current page, not from workspace 1.
+        x: wsRow.x + (root.activeWsId - root.pageBase) * (root.slotSize + root.slotSpacing)
         color: Theme.glassBg
         border.color: Theme.glassBorder
         border.width: 1
@@ -115,7 +124,7 @@ Bubble {
             delegate: Item {
                 id: slot
                 required property int index
-                readonly property int wsId: index + 1
+                readonly property int wsId: root.pageBase + index
                 readonly property bool isActive: root.activeWsId === wsId
 
                 // Windows Hyprland reports on this workspace. Reading the
