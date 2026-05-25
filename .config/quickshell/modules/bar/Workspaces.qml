@@ -139,56 +139,30 @@ Bubble {
                     ? root.iconForWindows(windowsHere)
                     : ""
 
-                // 0 = normal (icon/dot), 1 = number revealed (Super held). A
-                // single animated value drives the whole transition: the number
-                // fades in while the app icon shrinks into the corner.
-                property real reveal: BarState.showNumbers ? 1 : 0
-                Behavior on reveal {
-                    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-                }
-
                 width: root.slotSize
                 height: root.slotSize
 
-                // Empty workspace: a small dot. Fades out as the number fades
-                // in, so an empty slot reads purely as its number while held.
+                // Empty workspace: a small dot.
                 Rectangle {
                     anchors.centerIn: parent
+                    visible: !slot.isOccupied
                     width: 6
                     height: 6
                     radius: 3
                     color: slot.isActive ? Theme.textBright : Theme.textMuted
-                    opacity: slot.isOccupied ? 0 : (1 - slot.reveal)
-                    visible: opacity > 0.01
                     Behavior on color { ColorAnimation { duration: 200 } }
                 }
 
-                // Occupied workspace: the app icon. Full size and centred
-                // normally; while the number is revealed it shrinks and slides
-                // into the bottom-right corner as a small badge. Both size and
-                // position are driven off `reveal`, so they animate together.
+                // Occupied workspace: the app icon. Dimmed slightly unless
+                // this is the active workspace.
                 IconImage {
+                    anchors.centerIn: parent
                     visible: slot.isOccupied
+                    width: 16
+                    height: 16
                     source: slot.iconSource
-                    width: 16 - 7 * slot.reveal      // 16 -> 9
-                    height: width
-                    // (slotSize - size)/2 centres it; *1 pins it to the corner.
-                    x: (slot.width - width) * (0.5 + 0.5 * slot.reveal)
-                    y: (slot.height - height) * (0.5 + 0.5 * slot.reveal)
                     opacity: slot.isActive ? 1.0 : 0.7
                     Behavior on opacity { NumberAnimation { duration: 200 } }
-                }
-
-                // The workspace number — the main glyph while Super is held.
-                Text {
-                    anchors.centerIn: parent
-                    text: slot.wsId
-                    font.family: Theme.mono
-                    font.pixelSize: 12
-                    font.bold: slot.isActive
-                    color: slot.isActive ? Theme.textBright : Theme.textSecondary
-                    opacity: slot.reveal
-                    visible: opacity > 0.01
                 }
 
                 MouseArea {
