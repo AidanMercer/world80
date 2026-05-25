@@ -41,10 +41,11 @@ Bubble {
         target: Hyprland
         function onRawEvent(event) {
             switch (event.name) {
-            case "openwindow":
-            case "closewindow":
-            case "movewindow":
+            case "openwindow":     // new window — fill in its class
+            case "closewindow":    // window gone
+            case "movewindow":     // window changed workspace
             case "movewindowv2":
+            case "activewindowv2": // focus changed — refresh focusHistoryID
                 Hyprland.refreshToplevels()
             }
         }
@@ -60,18 +61,28 @@ Bubble {
         return Quickshell.iconPath(name, "application-x-executable")
     }
 
-    // Choose the single icon to show for a workspace's windows. Scan newest
-    // first for one that has a class — a just-opened window can briefly lack
-    // one (see refreshToplevels note above), so skipping it falls back to an
-    // older window's icon instead of blanking the slot. Generic app icon if
-    // nothing has a class yet, so an occupied slot is never empty.
+    // Choose the single icon to show for a workspace's windows: the one that
+    // is — or was most recently — focused there. Hyprland ranks every window
+    // by focusHistoryID (0 = currently focused, then 1, 2, …), so the smallest
+    // value on a workspace is its active-or-last-active window. A just-opened
+    // window can briefly lack a class (see refreshToplevels note above), so we
+    // only consider windows that have one, and fall back to the generic app
+    // icon if none does yet — an occupied slot is never blank.
     function iconForWindows(wins) {
-        for (let i = wins.length - 1; i >= 0; i--) {
-            const cls = wins[i].lastIpcObject?.class ?? ""
-            if (cls)
-                return iconForClass(cls)
+        let best = null
+        let bestFh = Infinity
+        for (const w of wins) {
+            const cls = w.lastIpcObject?.class ?? ""
+            if (!cls)
+                continue
+            const fh = w.lastIpcObject?.focusHistoryID ?? Infinity
+            if (fh < bestFh) {
+                best = w
+                bestFh = fh
+            }
         }
-        return Quickshell.iconPath("application-x-executable")
+        return best ? iconForClass(best.lastIpcObject.class)
+                    : Quickshell.iconPath("application-x-executable")
     }
 
     // Sliding highlight behind the active workspace. Hidden when the active
