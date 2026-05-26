@@ -209,17 +209,14 @@ PanelWindow {
                 startX: view.width / 2 - root.pathSpan / 2; startY: view.height / 2
                 PathAttribute { name: "iwide"; value: root.sideWidth }
                 PathAttribute { name: "ihigh"; value: root.sideHeight }
-                PathAttribute { name: "iopac"; value: 0.5 }
                 PathAttribute { name: "iz";    value: 0 }
                 PathLine { x: view.width / 2; y: view.height / 2 }
                 PathAttribute { name: "iwide"; value: root.centreWidth }
                 PathAttribute { name: "ihigh"; value: root.centreHeight }
-                PathAttribute { name: "iopac"; value: 1.0 }
                 PathAttribute { name: "iz";    value: 10 }
                 PathLine { x: view.width / 2 + root.pathSpan / 2; y: view.height / 2 }
                 PathAttribute { name: "iwide"; value: root.sideWidth }
                 PathAttribute { name: "ihigh"; value: root.sideHeight }
-                PathAttribute { name: "iopac"; value: 0.5 }
                 PathAttribute { name: "iz";    value: 0 }
             }
 
@@ -254,7 +251,6 @@ PanelWindow {
                 // the interpolated path attributes (no layout reflow → smooth).
                 width: PathView.iwide ?? root.sideWidth
                 height: PathView.ihigh ?? root.sideHeight
-                opacity: PathView.iopac ?? 0.5
                 z: PathView.iz ?? 0
 
                 // Sheared parallelogram frame; clip masks the upright image to it.
@@ -277,6 +273,10 @@ PanelWindow {
                         height: root.imgH
                         fillMode: Image.PreserveAspectCrop
                         source: root.fileUrl(card.wallpaper)
+                        // Decode each wallpaper ONCE at display size. Without this
+                        // Qt keeps the full multi-megapixel image in memory and
+                        // re-samples it through the shear every frame → stutter.
+                        sourceSize: Qt.size(root.imgW, root.imgH)
                         asynchronous: true
                         cache: true
                         smooth: true
