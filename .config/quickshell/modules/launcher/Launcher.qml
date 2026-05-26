@@ -38,7 +38,13 @@ PanelWindow {
     // Reading DesktopEntries.applications in a live binding keeps the (lazy)
     // service populated; .values is the plain JS array of entries.
     readonly property var allApps: DesktopEntries.applications.values
-    property var results: filterApps(query, allApps)
+    readonly property var appResults: filterApps(query, allApps)
+    // Whenever the user has typed something, append a synthetic web-search row as
+    // the last result so it's always visible and reachable by arrow keys.
+    // activate() decides whether a given row launches an app or runs the search.
+    property var results: query.length > 0
+        ? appResults.concat([{ webSearch: true }])
+        : appResults
 
     function filterApps(q, apps) {
         const list = (apps || []).filter(a => a && a.name && !a.noDisplay)
@@ -71,8 +77,15 @@ PanelWindow {
         closeMenu()
     }
 
-    // Web-search fallback: when the query matches no app, Enter (or clicking the
-    // row) opens it in the default browser (zen, via xdg-open). %1 is the
+    // Activate a result row: the synthetic web-search row runs the search,
+    // every other row is a real app to launch.
+    function activate(item) {
+        if (!item) return
+        if (item.webSearch) root.searchWeb(root.query)
+        else root.launch(item)
+    }
+
+    // Opens the query in the default browser (zen, via xdg-open). %1 is the
     // URL-encoded query — change searchUrl to use a different engine.
     property string searchUrl: "https://www.google.com/search?q=%1"
     function searchWeb(q) {
@@ -206,10 +219,7 @@ PanelWindow {
                         if (e.key === Qt.Key_Down) { root.moveSel(1); e.accepted = true }
                         else if (e.key === Qt.Key_Up) { root.moveSel(-1); e.accepted = true }
                         else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                            if (root.results.length > 0)
-                                root.launch(root.results[root.selectedIndex])
-                            else
-                                root.searchWeb(root.query)
+                            root.activate(root.results[root.selectedIndex])
                             e.accepted = true
                         } else if (e.key === Qt.Key_Escape) {
                             root.closeMenu(); e.accepted = true
@@ -277,6 +287,9 @@ PanelWindow {
                             id: appRow
                             required property var modelData
                             required property int index
+                            // The synthetic last row (see root.results) has no
+                            // app name; it's the web-search action instead.
+                            readonly property bool isWeb: modelData.webSearch === true
                             width: ListView.view.width
                             height: 42
                             radius: 11
@@ -285,8 +298,11 @@ PanelWindow {
                                 : (rowMa.containsMouse ? Theme.rowHover : "transparent")
                             Behavior on color { ColorAnimation { duration: 120 } }
 
+                            // App rows get a dot; the web-search row gets a
+                            // magnifier glyph in its place.
                             Rectangle {
                                 id: dot
+                                visible: !appRow.isWeb
                                 anchors.left: parent.left
                                 anchors.leftMargin: 14
                                 anchors.verticalCenter: parent.verticalCenter
@@ -300,12 +316,27 @@ PanelWindow {
                             }
 
                             Text {
-                                anchors.left: dot.right
+                                visible: appRow.isWeb
+                                anchors.left: parent.left
                                 anchors.leftMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: String.fromCodePoint(0xF0349) // nf-md-magnify
+                                font.family: Theme.icon
+                                font.pixelSize: 16
+                                color: Theme.accent
+                            }
+
+                            Text {
+                                // Fixed left edge so app names and the search
+                                // label line up regardless of leading icon.
+                                anchors.left: parent.left
+                                anchors.leftMargin: 34
                                 anchors.right: parent.right
                                 anchors.rightMargin: 14
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: appRow.modelData.name
+                                text: appRow.isWeb
+                                    ? "Search the web for “" + root.query + "”"
+                                    : appRow.modelData.name
                                 color: appRow.ListView.isCurrentItem ? Theme.textBright : Theme.textTertiary
                                 font.pixelSize: 13
                                 elide: Text.ElideRight
@@ -317,56 +348,15 @@ PanelWindow {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onEntered: root.selectedIndex = appRow.index
-                                onClicked: root.launch(appRow.modelData)
+                                onClicked: root.activate(appRow.modelData)
                             }
                         }
                     }
 
-                    // No app matched, but the user typed something: offer a web
-                    // search. Styled like a selected row since it's the action
-                    // Enter will run.
-                    Rectangle {
-                        visible: root.results.length === 0 && root.query.length > 0
-                        width: parent.width
-                        height: 42
-                        radius: 11
-                        color: webMa.containsMouse ? Theme.rowSelected : Theme.rowHover
-
-                        Text {
-                            id: webGlyph
-                            anchors.left: parent.left
-                            anchors.leftMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: String.fromCodePoint(0xF0349) // nf-md-magnify
-                            font.family: Theme.icon
-                            font.pixelSize: 16
-                            color: Theme.accent
-                        }
-
-                        Text {
-                            anchors.left: webGlyph.right
-                            anchors.leftMargin: 12
-                            anchors.right: parent.right
-                            anchors.rightMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Search the web for “" + root.query + "”"
-                            color: Theme.textBright
-                            font.pixelSize: 13
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: webMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.searchWeb(root.query)
-                        }
-                    }
-
-                    // Truly empty (no query and no apps at all).
+                    // Only reachable with an empty query and no apps installed;
+                    // a non-empty query always has at least the web-search row.
                     Text {
-                        visible: root.results.length === 0 && root.query.length === 0
+                        visible: root.results.length === 0
                         width: parent.width
                         text: "No applications"
                         color: Theme.textMuted
