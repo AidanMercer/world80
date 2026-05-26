@@ -70,6 +70,16 @@ PanelWindow {
         entry.execute()
         closeMenu()
     }
+
+    // Web-search fallback: when the query matches no app, Enter (or clicking the
+    // row) opens it in the default browser (zen, via xdg-open). %1 is the
+    // URL-encoded query — change searchUrl to use a different engine.
+    property string searchUrl: "https://www.google.com/search?q=%1"
+    function searchWeb(q) {
+        if (!q) return
+        Quickshell.execDetached(["xdg-open", root.searchUrl.arg(encodeURIComponent(q))])
+        closeMenu()
+    }
     function moveSel(delta) {
         if (results.length === 0) return
         selectedIndex = Math.max(0, Math.min(results.length - 1, selectedIndex + delta))
@@ -196,7 +206,11 @@ PanelWindow {
                         if (e.key === Qt.Key_Down) { root.moveSel(1); e.accepted = true }
                         else if (e.key === Qt.Key_Up) { root.moveSel(-1); e.accepted = true }
                         else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                            root.launch(root.results[root.selectedIndex]); e.accepted = true
+                            if (root.results.length > 0)
+                                root.launch(root.results[root.selectedIndex])
+                            else
+                                root.searchWeb(root.query)
+                            e.accepted = true
                         } else if (e.key === Qt.Key_Escape) {
                             root.closeMenu(); e.accepted = true
                         }
@@ -308,10 +322,53 @@ PanelWindow {
                         }
                     }
 
-                    Text {
-                        visible: root.results.length === 0
+                    // No app matched, but the user typed something: offer a web
+                    // search. Styled like a selected row since it's the action
+                    // Enter will run.
+                    Rectangle {
+                        visible: root.results.length === 0 && root.query.length > 0
                         width: parent.width
-                        text: root.query.length ? "No matches" : "No applications"
+                        height: 42
+                        radius: 11
+                        color: webMa.containsMouse ? Theme.rowSelected : Theme.rowHover
+
+                        Text {
+                            id: webGlyph
+                            anchors.left: parent.left
+                            anchors.leftMargin: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: String.fromCodePoint(0xF0349) // nf-md-magnify
+                            font.family: Theme.icon
+                            font.pixelSize: 16
+                            color: Theme.accent
+                        }
+
+                        Text {
+                            anchors.left: webGlyph.right
+                            anchors.leftMargin: 12
+                            anchors.right: parent.right
+                            anchors.rightMargin: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Search the web for “" + root.query + "”"
+                            color: Theme.textBright
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            id: webMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.searchWeb(root.query)
+                        }
+                    }
+
+                    // Truly empty (no query and no apps at all).
+                    Text {
+                        visible: root.results.length === 0 && root.query.length === 0
+                        width: parent.width
+                        text: "No applications"
                         color: Theme.textMuted
                         font.pixelSize: 13
                         font.italic: true
