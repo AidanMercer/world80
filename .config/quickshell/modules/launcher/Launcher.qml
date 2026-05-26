@@ -91,13 +91,18 @@ PanelWindow {
         onClicked: root.closeMenu()
     }
 
-    // ---- the glass card ------------------------------------------------
+    // ---- the floating launcher ----------------------------------------
+    // Only the search box is a frosted surface; the results below have no
+    // background and float over the clear desktop. The search box is centred
+    // both ways; results grow downward from it without shifting it.
     Item {
         id: morph
-        width: card.width
-        height: card.height
+        width: searchBox.width
+        height: layoutCol.height
         x: (parent.width - width) / 2
-        y: parent.height * 0.16
+        // Centre the *search box* on screen (its half-height, not the whole
+        // column's) so it stays put as the results list grows and shrinks.
+        y: (parent.height - searchBox.height) / 2
         opacity: 0
         scale: 0.92
         transformOrigin: Item.Top
@@ -126,171 +131,161 @@ PanelWindow {
             }
         ]
 
-        Rectangle {
-            id: card
-            width: 480
-            height: cardCol.height + 24
-            radius: Theme.popupRadius
-            color: Theme.glassBg
-            border.color: Theme.glassBorder
-            border.width: 1
+        Column {
+            id: layoutCol
+            width: parent.width
+            spacing: 10
 
-            // Swallow clicks that land on the card background so they don't
-            // fall through to the scrim and close the launcher.
-            MouseArea { anchors.fill: parent }
-
-            // Thin highlight along the top edge, same as the popups.
+            // ── the only frosted surface: the search box ──
             Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.leftMargin: parent.radius
-                anchors.rightMargin: parent.radius
-                anchors.topMargin: 1
-                height: 1
-                color: Theme.glassHighlight
-            }
+                id: searchBox
+                width: 480
+                height: 52
+                radius: Theme.popupRadius
+                color: Theme.glassBg
+                border.color: Theme.glassBorder
+                border.width: 1
 
-            Column {
-                id: cardCol
-                x: 12
-                y: 12
-                width: parent.width - 24
-                spacing: 10
+                // Swallow clicks on the box so they don't fall through to the
+                // scrim and close the launcher.
+                MouseArea { anchors.fill: parent }
 
-                // search row
-                Item {
-                    width: parent.width
-                    height: 38
-
-                    Text {
-                        id: searchGlyph
-                        anchors.left: parent.left
-                        anchors.leftMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: String.fromCodePoint(0xF0349) // nf-md-magnify
-                        font.family: Theme.icon
-                        font.pixelSize: 18
-                        color: Theme.textSecondary
-                    }
-
-                    TextInput {
-                        id: searchInput
-                        anchors.left: searchGlyph.right
-                        anchors.leftMargin: 12
-                        anchors.right: parent.right
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: Theme.textBright
-                        font.pixelSize: 16
-                        selectionColor: Theme.accent
-                        selectedTextColor: "#1a1a22"
-                        clip: true
-                        focus: true
-
-                        onTextChanged: {
-                            root.query = text
-                            root.selectedIndex = 0
-                        }
-
-                        Keys.onPressed: (e) => {
-                            if (e.key === Qt.Key_Down) { root.moveSel(1); e.accepted = true }
-                            else if (e.key === Qt.Key_Up) { root.moveSel(-1); e.accepted = true }
-                            else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                                root.launch(root.results[root.selectedIndex]); e.accepted = true
-                            } else if (e.key === Qt.Key_Escape) {
-                                root.closeMenu(); e.accepted = true
-                            }
-                        }
-
-                        Text {
-                            anchors.fill: parent
-                            verticalAlignment: Text.AlignVCenter
-                            text: "Search apps…"
-                            color: Theme.textMuted
-                            font: searchInput.font
-                            visible: searchInput.text.length === 0
-                        }
-                    }
-                }
-
+                // Thin highlight along the top edge, same as the popups.
                 Rectangle {
-                    width: parent.width
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.leftMargin: parent.radius
+                    anchors.rightMargin: parent.radius
+                    anchors.topMargin: 1
                     height: 1
-                    color: Theme.divider
-                }
-
-                // app list
-                ListView {
-                    id: list
-                    width: parent.width
-                    height: Math.min(root.results.length, 7) * 42
-                    clip: true
-                    model: root.results
-                    currentIndex: root.selectedIndex
-                    boundsBehavior: Flickable.StopAtBounds
-                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
-
-                    delegate: Rectangle {
-                        id: appRow
-                        required property var modelData
-                        required property int index
-                        width: ListView.view.width
-                        height: 42
-                        radius: 11
-                        color: ListView.isCurrentItem
-                            ? Theme.rowSelected
-                            : (rowMa.containsMouse ? Theme.rowHover : "transparent")
-                        Behavior on color { ColorAnimation { duration: 120 } }
-
-                        Rectangle {
-                            id: dot
-                            anchors.left: parent.left
-                            anchors.leftMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 8
-                            height: 8
-                            radius: 4
-                            color: appRow.ListView.isCurrentItem ? Theme.accent : "transparent"
-                            border.width: appRow.ListView.isCurrentItem ? 0 : 1
-                            border.color: Theme.dotBorder
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                        }
-
-                        Text {
-                            anchors.left: dot.right
-                            anchors.leftMargin: 12
-                            anchors.right: parent.right
-                            anchors.rightMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: appRow.modelData.name
-                            color: appRow.ListView.isCurrentItem ? Theme.textBright : Theme.textTertiary
-                            font.pixelSize: 13
-                            elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: rowMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered: root.selectedIndex = appRow.index
-                            onClicked: root.launch(appRow.modelData)
-                        }
-                    }
+                    color: Theme.glassHighlight
                 }
 
                 Text {
-                    visible: root.results.length === 0
-                    width: parent.width
-                    text: root.query.length ? "No matches" : "No applications"
-                    color: Theme.textMuted
-                    font.pixelSize: 13
-                    font.italic: true
-                    horizontalAlignment: Text.AlignHCenter
-                    topPadding: 6
-                    bottomPadding: 6
+                    id: searchGlyph
+                    anchors.left: parent.left
+                    anchors.leftMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: String.fromCodePoint(0xF0349) // nf-md-magnify
+                    font.family: Theme.icon
+                    font.pixelSize: 18
+                    color: Theme.textSecondary
                 }
+
+                TextInput {
+                    id: searchInput
+                    anchors.left: searchGlyph.right
+                    anchors.leftMargin: 12
+                    anchors.right: parent.right
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.textBright
+                    font.pixelSize: 16
+                    selectionColor: Theme.accent
+                    selectedTextColor: "#1a1a22"
+                    clip: true
+                    focus: true
+
+                    onTextChanged: {
+                        root.query = text
+                        root.selectedIndex = 0
+                    }
+
+                    Keys.onPressed: (e) => {
+                        if (e.key === Qt.Key_Down) { root.moveSel(1); e.accepted = true }
+                        else if (e.key === Qt.Key_Up) { root.moveSel(-1); e.accepted = true }
+                        else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                            root.launch(root.results[root.selectedIndex]); e.accepted = true
+                        } else if (e.key === Qt.Key_Escape) {
+                            root.closeMenu(); e.accepted = true
+                        }
+                    }
+
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: "Search apps…"
+                        color: Theme.textMuted
+                        font: searchInput.font
+                        visible: searchInput.text.length === 0
+                    }
+                }
+            }
+
+            // ── results: no background, floating over the clear desktop ──
+            // Row hover/selected tints sit below the blur's alpha threshold
+            // (see Theme.rowSelected/rowHover), so they stay clear too.
+            ListView {
+                id: list
+                width: parent.width
+                height: Math.min(root.results.length, 8) * 42
+                visible: root.results.length > 0
+                clip: true
+                model: root.results
+                currentIndex: root.selectedIndex
+                boundsBehavior: Flickable.StopAtBounds
+                onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+
+                delegate: Rectangle {
+                    id: appRow
+                    required property var modelData
+                    required property int index
+                    width: ListView.view.width
+                    height: 42
+                    radius: 11
+                    color: ListView.isCurrentItem
+                        ? Theme.rowSelected
+                        : (rowMa.containsMouse ? Theme.rowHover : "transparent")
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Rectangle {
+                        id: dot
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: appRow.ListView.isCurrentItem ? Theme.accent : "transparent"
+                        border.width: appRow.ListView.isCurrentItem ? 0 : 1
+                        border.color: Theme.dotBorder
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+
+                    Text {
+                        anchors.left: dot.right
+                        anchors.leftMargin: 12
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: appRow.modelData.name
+                        color: appRow.ListView.isCurrentItem ? Theme.textBright : Theme.textTertiary
+                        font.pixelSize: 13
+                        elide: Text.ElideRight
+                    }
+
+                    MouseArea {
+                        id: rowMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: root.selectedIndex = appRow.index
+                        onClicked: root.launch(appRow.modelData)
+                    }
+                }
+            }
+
+            Text {
+                visible: root.results.length === 0
+                width: parent.width
+                text: root.query.length ? "No matches" : "No applications"
+                color: Theme.textMuted
+                font.pixelSize: 13
+                font.italic: true
+                horizontalAlignment: Text.AlignHCenter
+                topPadding: 6
+                bottomPadding: 6
             }
         }
     }
