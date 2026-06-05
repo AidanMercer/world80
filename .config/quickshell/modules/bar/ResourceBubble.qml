@@ -2,12 +2,15 @@ import QtQuick
 import Quickshell.Io
 import "../common"
 
-// Top-right bar bubble: live CPU / RAM usage as little icon + percent groups,
-// in the same frosted glass as the other bubbles. Each group turns amber over
-// 60% and red over 85% (see the Stat component) so load is obvious at a glance.
+// Top-right bar bubble: live CPU / RAM (and battery, on the laptop) as little
+// icon + percent groups, in the same frosted glass as the other bubbles. CPU and
+// RAM turn amber over 60% and red over 85%; battery does the inverse — amber under
+// 30%, red under 15% — so load and a dying battery are both obvious at a glance.
 //
 //   • CPU — % busy over the last poll, from the delta of two /proc/stat samples
 //   • RAM — used / total, from /proc/meminfo (MemTotal vs MemAvailable)
+//   • BAT — capacity + charging state from /sys/class/power_supply/BAT*; the whole
+//           group hides itself on machines with no battery (the desktop)
 Bubble {
     id: root
     width: statRow.width + 24
@@ -15,6 +18,9 @@ Bubble {
     // Each metric: 0–100, or -1 when not yet sampled (renders "—").
     property int cpuPercent: -1
     property int ramPercent: -1
+    property int batteryPercent: -1
+    property bool batteryCharging: false
+    property bool hasBattery: false
 
     // Extras shown in the hover tooltip — not on the bubble face itself.
     property real load1: 0
@@ -66,6 +72,7 @@ Bubble {
             cpuProc.running = true
             ramProc.running = true
             loadProc.running = true
+            batProc.running = true
         }
     }
 
@@ -129,16 +136,51 @@ Bubble {
         }
     }
 
+    // ── battery: capacity + status from the first BAT* under power_supply ──
+    // sh -c so we can glob BAT0/BAT1; prints "<capacity>\n<status>". Empty output
+    // (desktop, no battery) leaves hasBattery false and the group stays hidden.
+    Process {
+        id: batProc
+        command: ["sh", "-c", "for b in /sys/class/power_supply/BAT*; do [ -e \"$b/capacity\" ] && { cat \"$b/capacity\" \"$b/status\"; break; }; done"]
+        running: false
+        stdout: StdioCollector { onStreamFinished: root.parseBattery(text) }
+    }
+    function parseBattery(raw) {
+        const lines = raw.trim().split("\n")
+        const cap = parseInt(lines[0])
+        if (lines[0] === "" || isNaN(cap)) { root.hasBattery = false; return }
+        root.hasBattery = true
+        root.batteryPercent = cap
+        root.batteryCharging = (lines[1] || "").trim() === "Charging"
+    }
+
+    // Material Design battery glyphs: a bolt when charging, otherwise a level
+    // bucket (battery_10 … battery_90), full near the top, alert near empty.
+    function batteryGlyph(level, charging) {
+        if (charging) return String.fromCodePoint(0xF0084)      // battery-charging
+        if (level >= 95) return String.fromCodePoint(0xF0079)   // battery (full)
+        if (level < 10) return String.fromCodePoint(0xF0083)    // battery-alert
+        return String.fromCodePoint(0xF0079 + Math.floor(level / 10)) // _10 … _90
+    }
+
     // ── one icon + percentage pair; fixed-width number so the bar never jiggles
     //    as values change (1% → 100%) ──
     component Stat: Row {
         id: stat
         property string glyph: ""
         property int value: -1
-        // amber once a metric passes 60%, red past 85% — below that each element
-        // keeps its resting colour (dim icon, bright number).
-        readonly property bool warn: value >= 60 && value < 85
-        readonly property bool crit: value >= 85
+        // Thresholds default to "high is bad" (CPU/RAM): amber over 60, red over
+        // 85. Battery flips lowIsBad and uses the values as floors instead.
+        property int warnAt: 60
+        property int critAt: 85
+        property bool lowIsBad: false
+        // charging suppresses the warn/red colours (no point alarming on a battery
+        // that's already plugged in) and tints the glyph with the accent instead.
+        property bool charging: false
+        readonly property bool crit: value >= 0 && !charging
+            && (lowIsBad ? value <= critAt : value >= critAt)
+        readonly property bool warn: value >= 0 && !charging && !crit
+            && (lowIsBad ? value <= warnAt : value >= warnAt)
         spacing: 5
 
         Text {
@@ -146,7 +188,8 @@ Bubble {
             text: stat.glyph
             font.family: Theme.icon
             font.pixelSize: 14
-            color: stat.crit ? Theme.danger : stat.warn ? Theme.warning : Theme.textSecondary
+            color: stat.crit ? Theme.danger : stat.warn ? Theme.warning
+                 : stat.charging ? Theme.accent : Theme.textSecondary
             Behavior on color { ColorAnimation { duration: 200 } }
         }
 
@@ -170,5 +213,14 @@ Bubble {
 
         Stat { glyph: String.fromCodePoint(0xF0EE0); value: root.cpuPercent } // nf-md-cpu_64_bit
         Stat { glyph: String.fromCodePoint(0xF035B); value: root.ramPercent } // nf-md-memory
+        Stat {
+            visible: root.hasBattery
+            glyph: root.batteryGlyph(root.batteryPercent, root.batteryCharging)
+            value: root.batteryPercent
+            lowIsBad: true
+            warnAt: 30
+            critAt: 15
+            charging: root.batteryCharging
+        }
     }
 }
