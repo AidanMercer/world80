@@ -8,9 +8,10 @@ import "../common"
 // `cava` in raw-ascii mode (see cava.conf) so it streams one line per frame —
 // 40 numbers 0..1000 — on stdout; we parse each line and let the bars follow.
 //
-// The window sits on the Top layer (above normal windows, below the launcher /
-// popups which are Overlay) and is fully click-through, so it's a passive
-// overlay you can't accidentally grab. One per screen via Variants in shell.qml.
+// The window sits on the Bottom layer — above the wallpaper, below your
+// windows — and is fully click-through, so it's a passive ambient overlay you
+// see in the gaps. Frosting comes from the `blur` layerrule on this namespace
+// in hyprland.conf. One per screen via Variants in shell.qml.
 PanelWindow {
     id: root
     required property var modelData
@@ -21,7 +22,7 @@ PanelWindow {
     property var levels: []                     // barCount values, each 0..1
 
     WlrLayershell.namespace: "quickshell-audiobars"
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: WlrLayer.Bottom
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
     // Span the full right edge, starting just under the top bar.
@@ -78,11 +79,11 @@ PanelWindow {
                     width: Math.max(2, (root.levels[index] || 0) * root.maxLen)
                     Behavior on width { NumberAnimation { duration: 45; easing.type: Easing.OutQuad } }
 
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: Theme.volGradEnd }
-                        GradientStop { position: 1.0; color: Theme.volGradStart }
-                    }
+                    // Frosted glass: translucent fill (Hyprland blurs what's
+                    // behind it) with a faint glassy edge. Same palette as the bar.
+                    color: Theme.glassBg
+                    border.color: Theme.glassBorder
+                    border.width: 1
                 }
             }
         }
