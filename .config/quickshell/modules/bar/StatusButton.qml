@@ -2,17 +2,18 @@ import QtQuick
 import Quickshell.Io
 import "../common"
 
-// The single status button: a compact Arch-logo glass square that sits just
-// right of the workspaces. Clicking it opens the ControlPopup (network / sound
-// / bluetooth / power). It shows only the Arch glyph, but it is the persistent
-// owner of two bits of state the popup displays:
+// The single status button: a bare Arch glyph that sits just right of the
+// workspaces. Clicking it opens the ControlPopup (network / sound / bluetooth /
+// power). It shows only the Arch glyph, but it is the persistent owner of two
+// bits of state the popup displays:
 //   • the uptime readout (shown in the popup header), and
 //   • the polled network status (shown in the popup's Network tab).
 // Keeping these here means they stay live whether or not the popup is open,
 // exactly like the old always-on bubbles did.
-Bubble {
+Item {
     id: root
     width: Theme.bubbleHeight
+    height: Theme.bubbleHeight
 
     property bool active: false
     signal popupToggleRequested()
@@ -64,16 +65,15 @@ Bubble {
         connName = nextName
     }
 
-    // Tint the glass while the popup is open or the button is hovered.
-    color: active || ma.containsMouse ? Theme.rowSelected : Theme.glassBg
-    Behavior on color { ColorAnimation { duration: 150 } }
-
+    // Brighten the glyph while the popup is open or the button is hovered.
     Text {
         anchors.centerIn: parent
         text: root.iconArch
         color: Theme.accent
         font.family: Theme.icon
         font.pixelSize: 15
+        opacity: root.active || ma.containsMouse ? 1.0 : 0.75
+        Behavior on opacity { NumberAnimation { duration: 150 } }
     }
 
     MouseArea {
