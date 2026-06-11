@@ -46,6 +46,14 @@ PanelWindow {
         }
     }
 
+    // blend two colors; t=0 → a, t=1 → b, with an explicit alpha
+    function mix(a, b, t, alpha) {
+        return Qt.rgba(a.r + (b.r - a.r) * t,
+                       a.g + (b.g - a.g) * t,
+                       a.b + (b.b - a.b) * t,
+                       alpha)
+    }
+
     function parseFrame(line) {
         const parts = line.split(";")
         const out = []
@@ -76,13 +84,18 @@ PanelWindow {
                     radius: height / 2
                     // grows left from the edge; never fully vanishes so the strip
                     // keeps a faint baseline at silence
-                    width: Math.max(2, (root.levels[index] || 0) * root.maxLen)
+                    width: Math.max(2, level * root.maxLen)
                     Behavior on width { NumberAnimation { duration: 45; easing.type: Easing.OutQuad } }
 
-                    // Frosted glass: translucent fill (Hyprland blurs what's
-                    // behind it) with a faint glassy edge. Same palette as the bar.
-                    color: Theme.glassBg
-                    border.color: Theme.glassBorder
+                    readonly property real level: root.levels[index] || 0
+                    // position down the strip, 0 (top) → 1 (bottom)
+                    readonly property real t: index / (root.barCount - 1)
+
+                    // theme accent gradient, periwinkle (top) → lavender (bottom),
+                    // staying translucent so Hyprland's blur shows through. Louder
+                    // bars lift their alpha so the spectrum glows on the beat.
+                    color: root.mix(Theme.volGradStart, Theme.volGradEnd, t, 0.32 + level * 0.33)
+                    border.color: root.mix(Theme.volGradStart, Theme.volGradEnd, t, 0.45 + level * 0.4)
                     border.width: 1
                 }
             }
