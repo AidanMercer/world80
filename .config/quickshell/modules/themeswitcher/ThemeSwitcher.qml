@@ -136,7 +136,10 @@ PanelWindow {
     Process {
         id: applyProc
         running: false
-        onExited: (code, status) => root.closeMenu()
+        onExited: (code, status) => {
+            ControlBus.notifyWallpaperChanged()   // let per-theme widgets reload
+            root.closeMenu()
+        }
     }
 
     IpcHandler {

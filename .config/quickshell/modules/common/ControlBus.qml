@@ -22,6 +22,11 @@ QtObject {
     // DisplayIdentify overlays watch this.
     property string identifyMonitor: ""
 
+    // Fired whenever the wallpaper changes (theme switch), so per-theme desktop
+    // widgets — like the themeclock loader — can re-query awww and swap.
+    signal wallpaperChanged()
+    function notifyWallpaperChanged() { wallpaperChanged() }
+
     // Toggle the popup on a specific monitor (used by the StatusButton click).
     function toggle(name) {
         openMonitor = (openMonitor === name) ? "" : name

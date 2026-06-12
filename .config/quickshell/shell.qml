@@ -4,6 +4,7 @@ import "modules/common"
 import "modules/bar"
 import "modules/audiobars"
 import "modules/launcher"
+import "modules/themeclock"
 import "modules/themeswitcher"
 import "modules/shortcuts"
 
@@ -25,6 +26,13 @@ ShellRoot {
             return [best]
         }
         AudioBars {}
+    }
+
+    // Per-monitor desktop clock owned by the active theme: each theme folder can
+    // ship a clock.qml that loads only while its wallpaper is showing.
+    Variants {
+        model: Quickshell.screens
+        ThemeClock {}
     }
 
     // Per-screen "identify" badge: a big white card naming the physical display
