@@ -7,6 +7,7 @@ import "modules/launcher"
 import "modules/themeclock"
 import "modules/themeswitcher"
 import "modules/shortcuts"
+import "modules/osd"
 
 ShellRoot {
     Variants {
@@ -41,6 +42,9 @@ ShellRoot {
         model: Quickshell.screens
         DisplayIdentify {}
     }
+
+    // Volume / brightness OSD; the XF86 media keys call into it over IPC.
+    Osd {}
 
     // Single app launcher window; toggled over IPC from the Super keybind.
     Launcher {}
