@@ -13,6 +13,11 @@
 #
 # Color roles use "R,G,B" (0-255). The file-list text in Dolphin is driven by
 # [Colors:View] ForegroundNormal — that was the role rendering black at startup.
+#
+# Window transparency is NOT done here — it's handled by Kvantum (style=kvantum
+# in qt6ct, theme in ~/.config/Kvantum/Moon). These colors stay solid; Kvantum's
+# base/window colors carry the alpha. The org.kde.dolphin windowrule keeps
+# hyprland's global dim off so text isn't faded.
 
 [General]
 ColorScheme=CustomDark
