@@ -20,22 +20,41 @@ PanelWindow {
     implicitHeight: Theme.barHeight
     color: "transparent"
 
+    readonly property int bubblePad: 14
+
     PwObjectTracker {
         objects: [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource]
+    }
+
+    // Glass pill behind the centre cluster (workspaces + status button). Declared
+    // before the content so it paints underneath.
+    Bubble {
+        id: centerBubble
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        width: workspaces.width + 8 + statusButton.width + bar.bubblePad * 2
+    }
+
+    // Glass pill behind the side readouts (CPU / RAM / battery).
+    Bubble {
+        id: rightBubble
+        anchors.right: parent.right
+        anchors.rightMargin: 8
+        anchors.verticalCenter: parent.verticalCenter
+        width: resourceBubble.width + bar.bubblePad * 2
     }
 
     // Top-right: live CPU / RAM / GPU usage.
     ResourceBubble {
         id: resourceBubble
-        anchors.right: parent.right
-        anchors.rightMargin: 10
+        anchors.horizontalCenter: rightBubble.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
     }
 
     Workspaces {
         id: workspaces
         monitor: Hyprland.monitorFor(bar.screen)
-        anchors.horizontalCenter: parent.horizontalCenter
+        x: centerBubble.x + bar.bubblePad
         anchors.verticalCenter: parent.verticalCenter
     }
 

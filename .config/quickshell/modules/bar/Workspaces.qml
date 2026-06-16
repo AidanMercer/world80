@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Widgets
@@ -9,16 +8,6 @@ Item {
     id: root
     width: wsRow.width
     height: Theme.bubbleHeight
-
-    // Soft contrast halo so the dots/icons read over any wallpaper.
-    layer.enabled: true
-    layer.effect: MultiEffect {
-        shadowEnabled: true
-        shadowColor: Theme.textShadow
-        shadowBlur: 0.6
-        shadowVerticalOffset: 0
-        shadowHorizontalOffset: 0
-    }
 
     // The Hyprland monitor this bar lives on; each bar passes its own.
     required property var monitor
@@ -127,7 +116,7 @@ Item {
                     width: 6
                     height: 6
                     radius: 3
-                    color: slot.isActive ? Theme.textBright : Theme.textMuted
+                    color: Theme.textBright
                     opacity: slot.isActive ? 1.0 : 0.4
                     Behavior on color { ColorAnimation { duration: 200 } }
                     Behavior on opacity { NumberAnimation { duration: 200 } }

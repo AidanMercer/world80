@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell.Io
 import "../common"
 
@@ -219,15 +218,6 @@ Item {
         id: statRow
         anchors.centerIn: parent
         spacing: 10
-
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowColor: Theme.textShadow
-            shadowBlur: 0.6
-            shadowVerticalOffset: 0
-            shadowHorizontalOffset: 0
-        }
 
         Stat { glyph: String.fromCodePoint(0xF0EE0); value: root.cpuPercent } // nf-md-cpu_64_bit
         Stat { glyph: String.fromCodePoint(0xF035B); value: root.ramPercent } // nf-md-memory
