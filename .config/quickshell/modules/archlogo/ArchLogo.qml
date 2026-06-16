@@ -183,15 +183,16 @@ PanelWindow {
             id: logo
             source: Qt.resolvedUrl("arch.svg")
             visible: false                         // source only; MultiEffect draws it
-            width: 188
-            height: 188
-            sourceSize.width: 376
-            sourceSize.height: 376
+            width: 200
+            height: 200
+            sourceSize.width: 400
+            sourceSize.height: 400
             fillMode: Image.PreserveAspectFit
             anchors.centerIn: parent
-            // the arch "A"'s mass sits low in its box, and the triangle has far more
-            // empty room up toward the apex — lift the logo so it nests centered.
-            anchors.verticalCenterOffset: -36
+            // the arch ink is centered in its box, but the triangle's centroid sits
+            // below its bbox center — lift the logo so its bbox lines up with the
+            // triangle's, giving equal gaps top and bottom. (measured, not eyeballed)
+            anchors.verticalCenterOffset: -40
             scale: 1 + root.pulse * 0.06
         }
 
