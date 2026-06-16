@@ -1,10 +1,16 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
-import Quickshell.Services.Pipewire
+import Quickshell.Io
 import "../common"
 
+// Top bar wrapper, owned by the active theme. Reserves the bar's height/exclusive
+// zone, then loads either a theme's own bar.qml or the default BarContent. Same
+// loader idea as ArchLogo/ThemeClock: a theme folder (~/.config/themes/<name>/)
+// may drop a bar.qml next to its wallpaper; no bar.qml → the default bar shows.
+//
+// The theme's bar.qml is loaded by file path so it can't import the repo modules,
+// so it's self-contained — it gets only its Hyprland screen, injected after load.
 PanelWindow {
     id: bar
     required property var modelData
@@ -20,81 +26,73 @@ PanelWindow {
     implicitHeight: Theme.barHeight
     color: "transparent"
 
-    readonly property int bubblePad: 14
+    property string barPath: ""                  // theme's bar.qml, "" if none
+    property bool queryDone: false
+    property int retriesLeft: 10
 
-    PwObjectTracker {
-        objects: [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource]
+    function fileUrl(p) {
+        return "file://" + p.split("/").map(encodeURIComponent).join("/")
     }
 
-    // Glass pill behind the centre cluster (workspaces + status button). Declared
-    // before the content so it paints underneath.
-    Bubble {
-        id: centerBubble
-        visible: ThemeConfig.bubbles
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        width: workspaces.width + 8 + statusButton.width + bar.bubblePad * 2
+    Process {
+        id: queryProc
+        command: ["bash", "-c",
+            'name="$1"; ' +
+            'line=$(awww query 2>/dev/null | grep -m1 -- "$name:"); ' +
+            'img=$(printf "%s" "$line" | sed -n "s/.*image: //p"); ' +
+            '[ -n "$img" ] || exit 0; ' +
+            'printf "__OK__\\n"; ' +
+            'c="$(dirname "$img")/bar.qml"; ' +
+            '[ -f "$c" ] && printf "%s" "$c"',
+            "_", bar.screen ? bar.screen.name : ""]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.indexOf("__OK__") === -1) return
+                bar.retriesLeft = 0
+                bar.queryDone = true
+                bar.barPath = (text.split("__OK__")[1] || "").trim()
+            }
+        }
     }
 
-    // Glass pill behind the side readouts (CPU / RAM / battery).
-    Bubble {
-        id: rightBubble
-        visible: ThemeConfig.bubbles
-        anchors.right: parent.right
-        anchors.rightMargin: 8
-        anchors.verticalCenter: parent.verticalCenter
-        width: resourceBubble.width + bar.bubblePad * 2
+    // theme's own bar — self-contained, gets its screen injected after load
+    Loader {
+        id: themeLoader
+        anchors.fill: parent
+        active: bar.barPath !== ""
+        source: bar.barPath !== "" ? bar.fileUrl(bar.barPath) : ""
+        onLoaded: if (item) item.barScreen = bar.screen
     }
 
-    // Top-right: live CPU / RAM / GPU usage.
-    ResourceBubble {
-        id: resourceBubble
-        anchors.horizontalCenter: rightBubble.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
+    // default bar — once we know the theme ships no bar.qml
+    Loader {
+        anchors.fill: parent
+        active: bar.queryDone && bar.barPath === ""
+        sourceComponent: defaultContent
+    }
+    Component {
+        id: defaultContent
+        BarContent { barWindow: bar }
     }
 
-    Workspaces {
-        id: workspaces
-        monitor: Hyprland.monitorFor(bar.screen)
-        x: centerBubble.x + bar.bubblePad
-        anchors.verticalCenter: parent.verticalCenter
+    Component.onCompleted: queryProc.running = true
+
+    Timer {
+        interval: 2000
+        repeat: true
+        running: !bar.queryDone && bar.retriesLeft > 0
+        onTriggered: {
+            bar.retriesLeft--
+            queryProc.running = true
+        }
     }
 
-    // Single status button just right of the workspaces. Opens the ControlPopup
-    // (network / sound / bluetooth / power) and owns the uptime + network status
-    // the popup displays.
-    StatusButton {
-        id: statusButton
-        active: controlPopup.open
-        anchors.left: workspaces.right
-        anchors.leftMargin: 8
-        anchors.verticalCenter: parent.verticalCenter
-        onPopupToggleRequested: ControlBus.toggle(bar.screen ? bar.screen.name : "")
-    }
-
-    ControlPopup {
-        id: controlPopup
-        barWindow: bar
-        anchorCenterX: statusButton.x + statusButton.width / 2
-        connType: statusButton.connType
-        connName: statusButton.connName
-        uptimeText: statusButton.uptimeText
-        onConnectionChanged: statusButton.refresh()
-    }
-
-    // Hover the ResourceBubble to see the breakdown behind the percentages
-    // (load averages, core count, RAM in GB). Lives in its own layer-shell
-    // overlay so it can spill below the bar.
-    ResourceTooltip {
-        barWindow: bar
-        open: resourceBubble.hovered
-        cpuPercent: resourceBubble.cpuPercent
-        ramPercent: resourceBubble.ramPercent
-        load1: resourceBubble.load1
-        load5: resourceBubble.load5
-        load15: resourceBubble.load15
-        cpuCores: resourceBubble.cpuCores
-        ramUsedGb: resourceBubble.ramUsedGb
-        ramTotalGb: resourceBubble.ramTotalGb
+    Connections {
+        target: ControlBus
+        function onWallpaperChanged() {
+            bar.queryDone = false
+            bar.retriesLeft = 10
+            queryProc.running = true
+        }
     }
 }

@@ -6,7 +6,6 @@ import "modules/bar"
 import "modules/archlogo"
 import "modules/launcher"
 import "modules/themeclock"
-import "modules/themeoverlay"
 import "modules/themeswitcher"
 import "modules/shortcuts"
 import "modules/osd"
@@ -29,13 +28,6 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
         ThemeClock {}
-    }
-
-    // Per-monitor free-form scenery owned by the active theme: each theme folder
-    // can ship an overlay.qml (HUD frame, telemetry, …) loaded with its wallpaper.
-    Variants {
-        model: Quickshell.screens
-        ThemeOverlay {}
     }
 
     // Per-screen "identify" badge: a big white card naming the physical display
