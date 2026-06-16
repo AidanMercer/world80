@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell.Io
 import "../common"
 
@@ -74,6 +75,15 @@ Item {
         font.pixelSize: 15
         opacity: root.active || ma.containsMouse ? 1.0 : 0.75
         Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Theme.textShadow
+            shadowBlur: 0.6
+            shadowVerticalOffset: 0
+            shadowHorizontalOffset: 0
+        }
     }
 
     MouseArea {

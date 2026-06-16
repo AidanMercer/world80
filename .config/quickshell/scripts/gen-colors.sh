@@ -160,6 +160,7 @@ if band >= 0.50:
         "textDim":       hexc(dh, 0.30, 0.34),
         "glassBg":       hexc(dh, 0.10, 0.96, 0.55),
         "glassBorder":   hexc(dh, 0.40, 0.25, 0.30),
+        "textShadow":    "#B3FFFFFF",   # dark text -> light halo lifts it off dark gaps
     }
 else:
     out = {
@@ -174,6 +175,7 @@ else:
         "textDim":       hexc(acc_h, 0.08, 0.70),
         "glassBg":       hexc(dh, 0.32, 0.12, 0.55),
         "glassBorder":   hexc(acc_h, 0.30, 1.00, 0.22),
+        "textShadow":    "#B3000000",   # light text -> dark halo lifts it off bright patches
     }
 
 dst = os.path.expanduser("~/.cache/quickshell/colors.json")

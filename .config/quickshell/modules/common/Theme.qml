@@ -46,6 +46,9 @@ QtObject {
     readonly property color textTertiary: _c("textTertiary", "#d4d4dc")
     readonly property color textMuted: _c("textMuted", "#a0a4b0")
     readonly property color textDim: _c("textDim", "#a8acb6")
+    // Contrast halo painted behind the bar's bare elements so they stay legible
+    // over high-variance wallpapers (bright clouds with dark gaps).
+    readonly property color textShadow: _c("textShadow", Qt.rgba(0, 0, 0, 0.55))
 
     readonly property color accent: _c("accent", "#a8b5e8")
     readonly property color danger: "#e8919b"
