@@ -42,6 +42,31 @@ Item {
     function activateNav() { tapDevice(deviceList[navIndex].dev) }
     onNavIndexChanged: if (navIndex >= 0) devList.positionViewAtIndex(navIndex, ListView.Contain)
 
+    // Right-click context menu. menuDev is the device whose menu is open
+    // (null = closed); menuX/Y are its top-left anchor in root coordinates.
+    // The menu lives at root level (not in a row) so the list's clip doesn't
+    // eat it. Closes on tab switch / Bluetooth toggling off.
+    property var menuDev: null
+    property real menuX: 0
+    property real menuY: 0
+    function openMenu(d, x, y) { menuDev = d; menuX = x; menuY = y }
+    function closeMenu() { menuDev = null }
+    onActiveChanged: closeMenu()
+
+    // Context-appropriate actions for a device. trusted is a settable property
+    // (assign, don't call); forget/cancelPair/pair/connect/disconnect are methods.
+    function menuActions(d) {
+        if (!d) return []
+        const a = []
+        if (d.connected) a.push({ label: "Disconnect", fn: () => d.disconnect() })
+        else if (d.paired) a.push({ label: "Connect", fn: () => d.connect() })
+        if (d.pairing) a.push({ label: "Cancel pairing", fn: () => d.cancelPair() })
+        else if (!d.paired) a.push({ label: "Pair", fn: () => d.pair() })
+        if (d.paired) a.push({ label: d.trusted ? "Untrust" : "Trust", fn: () => { d.trusted = !d.trusted } })
+        if (d.paired) a.push({ label: "Forget", fn: () => d.forget(), danger: true })
+        return a
+    }
+
     // height of the scrollable device area (≈ 5 rows); keep this constant so the
     // popup never grows when a scan turns up a pile of nearby devices.
     readonly property int listHeight: 200
@@ -268,7 +293,15 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.tapDevice(btRow.dev)
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: (mouse) => {
+                            if (mouse.button === Qt.RightButton) {
+                                const p = mapToItem(root, mouse.x, mouse.y)
+                                root.openMenu(btRow.dev, p.x, p.y)
+                            } else {
+                                root.tapDevice(btRow.dev)
+                            }
+                        }
                     }
                 }
             }
@@ -294,6 +327,69 @@ Item {
                 font.pixelSize: 12
                 font.italic: true
                 horizontalAlignment: Text.AlignHCenter
+            }
+        }
+    }
+
+    // ── right-click context menu (root-level so the list clip can't trim it) ──
+    // Catches any press outside the menu to dismiss it.
+    MouseArea {
+        anchors.fill: parent
+        visible: root.menuDev !== null
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onPressed: root.closeMenu()
+    }
+
+    Rectangle {
+        id: ctxMenu
+        visible: root.menuDev !== null
+        readonly property var actions: root.menuActions(root.menuDev)
+        readonly property int rowH: 30
+        width: 172
+        height: actions.length * rowH + 8
+        radius: 12
+        color: Qt.rgba(0.10, 0.10, 0.13, 0.98)
+        border.width: 1
+        border.color: Theme.divider
+        // clamp inside root; flip above the cursor when it'd overflow the bottom.
+        x: Math.max(0, Math.min(root.menuX, root.width - width))
+        y: (root.menuY + height > root.height) ? Math.max(0, root.menuY - height) : root.menuY
+
+        Column {
+            anchors.fill: parent
+            anchors.margins: 4
+
+            Repeater {
+                model: ctxMenu.actions
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: parent.width
+                    height: ctxMenu.rowH
+                    radius: 8
+                    color: itemMa.containsMouse ? Theme.rowHover : "transparent"
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.label
+                        font.pixelSize: 12
+                        color: modelData.danger ? Theme.danger : Theme.textTertiary
+                    }
+
+                    MouseArea {
+                        id: itemMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            modelData.fn()
+                            root.rev++
+                            root.closeMenu()
+                        }
+                    }
+                }
             }
         }
     }
