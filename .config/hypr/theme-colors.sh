@@ -112,5 +112,9 @@ cat >"$out/hypr-colors.conf" <<EOF
 \$lock_bg = rgba(${bg}ee)
 EOF
 
+# bare hexes for non-templated consumers (the lavat fish wrapper tints from these)
+printf '%s' "$accent" >"$out/accent"
+printf '%s' "$dim" >"$out/accent_dim"
+
 # kitty reloads its config (includes and all) on SIGUSR1
 pkill -USR1 -x kitty 2>/dev/null || true
