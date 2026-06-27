@@ -63,14 +63,6 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
     }
 
-    // System tray, just left of the resource readout.
-    TrayWidget {
-        id: tray
-        barWindow: root.barWindow
-        anchors.right: rightBubble.left
-        anchors.rightMargin: tray.width > 0 ? 6 : 0
-        anchors.verticalCenter: parent.verticalCenter
-    }
 
     Workspaces {
         id: workspaces
