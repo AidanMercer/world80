@@ -12,6 +12,7 @@ import "modules/themeswitcher"
 import "modules/shortcuts"
 import "modules/osd"
 import "modules/lock"
+import "modules/notifications"
 
 ShellRoot {
     id: shellRoot
@@ -67,6 +68,9 @@ ShellRoot {
 
     // Volume / brightness OSD; the XF86 media keys call into it over IPC.
     Osd {}
+
+    // Notification daemon + popup stack, top-right on the focused monitor.
+    Notifications {}
 
     // Session lock — animated per-theme clock + PAM. Idle until triggered with
     // `qs ipc call lock lock` (hypridle lock_cmd / loginctl lock-session).
