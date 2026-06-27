@@ -513,6 +513,7 @@ PanelWindow {
                     connType: root.connType
                     connName: root.connName
                     onConnectionChanged: root.connectionChanged()
+                    onReturnFocus: card.forceActiveFocus()
                 }
 
                 SoundTab {

@@ -18,11 +18,19 @@ Item {
     property string connName: ""
     property bool active: false
     property var networks: []
+    property var savedConns: []
+
+    // inline password entry: when pendingSsid is set the password field is
+    // shown for that network (a new secured one we don't have saved yet).
+    property string pendingSsid: ""
+    property bool connecting: false
+    property bool authFailed: false
 
     // height of the scrollable wifi area (≈ 5 rows); keep this constant
     readonly property int listHeight: 172
 
     signal connectionChanged()
+    signal returnFocus()
 
     // Keyboard navigation, driven by ControlPopup's Up/Down/Enter. navIndex
     // highlights a wifi row (-1 = none); activateNav connects to it. Keep the
@@ -34,7 +42,10 @@ Item {
     function activateNav() { connectTo(networks[navIndex].ssid) }
     onNavIndexChanged: if (navIndex >= 0) list.positionViewAtIndex(navIndex, ListView.Contain)
 
-    onActiveChanged: if (active) wifiListProc.running = true
+    onActiveChanged: {
+        if (active) { wifiListProc.running = true; savedProc.running = true }
+        else cancelPassword()
+    }
 
     function splitNm(line) {
         const parts = []
@@ -74,9 +85,43 @@ Item {
         networks = Array.from(seen.values()).sort((a, b) => b.signal - a.signal)
     }
 
+    function isSecured(net) {
+        return net && net.security && net.security !== "" && net.security !== "--"
+    }
+
+    // open or already-saved networks connect on one click; a new secured one
+    // drops into the inline password field instead of failing silently.
     function connectTo(ssid) {
-        wifiConnectProc.command = ["nmcli", "device", "wifi", "connect", ssid]
+        const net = networks.find(n => n.ssid === ssid)
+        if (isSecured(net) && savedConns.indexOf(ssid) < 0) {
+            pendingSsid = ssid
+            authFailed = false
+            pwInput.text = ""
+            Qt.callLater(pwInput.forceActiveFocus)
+        } else {
+            runConnect(ssid, "")
+        }
+    }
+
+    function runConnect(ssid, password) {
+        let cmd = ["nmcli", "device", "wifi", "connect", ssid]
+        if (password) cmd = cmd.concat(["password", password])
+        wifiConnectProc.command = cmd
+        connecting = true
         wifiConnectProc.running = true
+    }
+
+    function submitPassword() {
+        if (!pwInput.text) return
+        runConnect(pendingSsid, pwInput.text)
+    }
+
+    function cancelPassword() {
+        pendingSsid = ""
+        pwInput.text = ""
+        authFailed = false
+        connecting = false
+        root.returnFocus()
     }
 
     Process {
@@ -91,11 +136,28 @@ Item {
     Process {
         id: wifiConnectProc
         running: false
-        onRunningChanged: {
-            if (!running) {
-                wifiListProc.running = true
-                root.connectionChanged()
+        onExited: (code, status) => {
+            connecting = false
+            if (code === 0) {
+                pendingSsid = ""
+                pwInput.text = ""
+                root.returnFocus()
+            } else if (pendingSsid) {
+                // nmcli exited non-zero while a password was pending — almost
+                // always a bad passphrase. keep the field up so they can retry.
+                authFailed = true
             }
+            wifiListProc.running = true
+            root.connectionChanged()
+        }
+    }
+
+    Process {
+        id: savedProc
+        command: ["nmcli", "-t", "-f", "NAME", "connection", "show"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: root.savedConns = text.trim().split("\n").filter(s => s.length > 0)
         }
     }
 
@@ -268,9 +330,97 @@ Item {
             }
         }
 
-        Text {
+        // ── inline password entry for a new secured network ──
+        Column {
+            visible: root.pendingSsid !== ""
             width: parent.width
-            text: "Click to connect (saved or open networks).  Use nmtui for new secured ones."
+            spacing: 6
+
+            Text {
+                width: parent.width
+                text: "Password for " + root.pendingSsid
+                color: Theme.textPrimary
+                font.pixelSize: 12
+                elide: Text.ElideRight
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 34
+                radius: 9
+                color: Theme.rowHover
+                border.width: 1
+                border.color: root.authFailed ? "#ff2e6c"
+                    : (pwInput.activeFocus ? Theme.accent : Theme.divider)
+
+                TextInput {
+                    id: pwInput
+                    anchors.left: parent.left
+                    anchors.right: showBtn.left
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.textBright
+                    font.pixelSize: 13
+                    echoMode: showBtn.reveal ? TextInput.Normal : TextInput.Password
+                    selectionColor: Theme.accent
+                    selectedTextColor: "#1a1a22"
+                    clip: true
+                    enabled: !root.connecting
+
+                    onTextChanged: root.authFailed = false
+
+                    Keys.onPressed: (e) => {
+                        if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                            root.submitPassword(); e.accepted = true
+                        } else if (e.key === Qt.Key_Escape) {
+                            root.cancelPassword(); e.accepted = true
+                        }
+                    }
+
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: root.connecting ? "Connecting…" : "Enter password"
+                        color: Theme.textMuted
+                        font: pwInput.font
+                        visible: pwInput.text.length === 0
+                    }
+                }
+
+                // show/hide toggle (mdi eye / eye-off)
+                Text {
+                    id: showBtn
+                    property bool reveal: false
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: reveal ? String.fromCodePoint(0xF0209) : String.fromCodePoint(0xF0208)
+                    font.family: Theme.icon
+                    font.pixelSize: 16
+                    color: Theme.textTertiary
+
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: { showBtn.reveal = !showBtn.reveal; pwInput.forceActiveFocus() }
+                    }
+                }
+            }
+
+            Text {
+                visible: root.authFailed
+                text: "Wrong password — try again"
+                color: "#ff2e6c"
+                font.pixelSize: 10
+            }
+        }
+
+        Text {
+            visible: root.pendingSsid === ""
+            width: parent.width
+            text: "Click to connect. Secured networks ask for a password."
             color: Theme.textMuted
             font.pixelSize: 10
             wrapMode: Text.WordWrap
