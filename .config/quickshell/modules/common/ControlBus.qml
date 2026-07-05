@@ -22,6 +22,10 @@ QtObject {
     // DisplayIdentify overlays watch this.
     property string identifyMonitor: ""
 
+    // True while the session lock is engaged (set by Lock.qml). The video
+    // wallpaper pauses its decoder behind the lock surfaces.
+    property bool sessionLocked: false
+
     // Fired whenever the wallpaper changes (theme switch), so per-theme desktop
     // widgets — like the themeclock loader — can re-query awww and swap.
     signal wallpaperChanged()

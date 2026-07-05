@@ -73,7 +73,9 @@ PanelWindow {
             'shopt -s nullglob; for d in "$HOME"/.config/themes/*/; do ' +
             'name=$(basename "$d"); ' +
             'for f in "$d"wallpaper.jpg "$d"wallpaper.jpeg "$d"wallpaper.png "$d"wallpaper.webp "$d"wallpaper.gif "$d"wallpaper.mp4; do ' +
-            '[ -e "$f" ] && { printf "%s\\t%s\\n" "$name" "$f"; break; }; done; done']
+            // video themes can't render in an Image — card shows the still instead
+            '[ -e "$f" ] && { t="$f"; case "$f" in *.mp4) [ -e "${d}still.png" ] && t="${d}still.png";; esac; ' +
+            'printf "%s\\t%s\\t%s\\n" "$name" "$f" "$t"; break; }; done; done']
         stdout: StdioCollector {
             onStreamFinished: root.loadThemes(text)
         }
@@ -85,7 +87,8 @@ PanelWindow {
         for (const line of lines) {
             const parts = line.split("\t")
             if (parts.length >= 2)
-                themeModel.append({ name: parts[0], wallpaper: parts[1] })
+                themeModel.append({ name: parts[0], wallpaper: parts[1],
+                                    thumb: parts[2] || parts[1] })
         }
     }
 
@@ -131,13 +134,24 @@ PanelWindow {
 
     // Swap to a wallpaper path — shared by the overlay and the `theme` IPC. The
     // applyProc.onExited handler fans out to the per-theme widgets + retints apps.
+    // awww can't animate video, so an mp4 theme is applied as its first frame
+    // (still.png, generated on first switch) — query/lock/loaders all keep
+    // working off the still, and VideoWall plays the actual video over it.
     function applyWallpaper(wallpaper) {
         if (!wallpaper) return
         root.pendingThemeDir = wallpaper.substring(0, wallpaper.lastIndexOf("/"))
-        applyProc.command = ["awww", "img",
-            "--transition-type", "fade",
-            "--transition-duration", "0.7",
-            wallpaper]
+        if (wallpaper.endsWith(".mp4")) {
+            applyProc.command = ["bash", "-c",
+                'v="$1"; s="${v%/*}/still.png"; ' +
+                '[ -f "$s" ] || ffmpeg -y -v error -i "$v" -frames:v 1 "$s"; ' +
+                'awww img --transition-type fade --transition-duration 0.7 "$s"',
+                "_", wallpaper]
+        } else {
+            applyProc.command = ["awww", "img",
+                "--transition-type", "fade",
+                "--transition-duration", "0.7",
+                wallpaper]
+        }
         applyProc.running = true
     }
 
@@ -305,6 +319,7 @@ PanelWindow {
                 id: card
                 required property string name
                 required property string wallpaper
+                required property string thumb
                 required property int index
                 // PathView positions us by our centre; size/opacity come from
                 // the interpolated path attributes (no layout reflow → smooth).
@@ -331,7 +346,7 @@ PanelWindow {
                         width: root.imgW
                         height: root.imgH
                         fillMode: Image.PreserveAspectCrop
-                        source: root.fileUrl(card.wallpaper)
+                        source: root.fileUrl(card.thumb)
                         // Decode each wallpaper ONCE at display size. Without this
                         // Qt keeps the full multi-megapixel image in memory and
                         // re-samples it through the shear every frame → stutter.

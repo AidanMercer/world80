@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtMultimedia
 import Quickshell
 import Quickshell.Io
 import "../common"
@@ -27,30 +28,67 @@ Item {
     onResetNonceChanged: pwInput.text = ""
 
     // ---- background: the live wallpaper, blurred + darkened ----------------
+    // Video themes (wallpaper.mp4 next to the still awww holds) keep playing
+    // here, muted and looping. A theme lock.qml carrying the `bareLock` marker
+    // takes over ALL the default chrome: background stays sharp and the
+    // blur/tint/clock/dots below stand down — the overlay draws its own,
+    // reading host.pwLength/failed/busy and blurring host.backgroundItem.
     property string wallpaper: ""
+    property string videoWallpaper: ""
+    property bool bare: false
+    readonly property Item backgroundItem: bgStack
+
     Process {
         id: wallQuery
         command: ["bash", "-c",
             'name="$1"; ' +
             'if [ -n "$name" ]; then line=$(awww query 2>/dev/null | grep -m1 -- "$name:"); ' +
             'else line=$(awww query 2>/dev/null | head -1); fi; ' +
-            'printf "%s" "$line" | sed -n "s/.*image: //p"',
+            'img=$(printf "%s" "$line" | sed -n "s/.*image: //p"); ' +
+            'printf "%s" "$img"; ' +
+            'v="${img%/*}/wallpaper.mp4"; [ -n "$img" ] && [ -f "$v" ] && printf "\\t%s" "$v"; true',
             "_", root.screenName]
-        stdout: StdioCollector { onStreamFinished: root.wallpaper = text.trim() }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parts = text.trim().split("\t")
+                root.wallpaper = parts[0] || ""
+                root.videoWallpaper = parts[1] || ""
+            }
+        }
     }
 
-    Image {
-        id: bgImage
+    Item {
+        id: bgStack
         anchors.fill: parent
-        source: root.wallpaper ? "file://" + root.wallpaper : ""
-        fillMode: Image.PreserveAspectCrop
-        visible: false
-        asynchronous: true
-        cache: true
+        visible: root.bare        // bare themes show it sharp; else only through the blur
+
+        Image {
+            id: bgImage
+            anchors.fill: parent
+            source: root.wallpaper && root.videoWallpaper === ""
+                    ? "file://" + root.wallpaper : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+        }
+        MediaPlayer {
+            id: bgPlayer
+            source: root.videoWallpaper !== "" ? root.fileUrl(root.videoWallpaper) : ""
+            videoOutput: bgVideo
+            loops: MediaPlayer.Infinite
+            onSourceChanged: if (source.toString() !== "") play()
+        }
+        VideoOutput {
+            id: bgVideo
+            anchors.fill: parent
+            fillMode: VideoOutput.PreserveAspectCrop
+            visible: root.videoWallpaper !== ""
+        }
     }
     MultiEffect {
         anchors.fill: parent
-        source: bgImage
+        visible: !root.bare
+        source: bgStack
         blurEnabled: true
         blur: 1.0
         blurMax: 40
@@ -58,7 +96,12 @@ Item {
         brightness: Theme.light ? 0.05 : -0.28
         saturation: 0.05
     }
-    Rectangle { anchors.fill: parent; color: ThemeConfig.glass; opacity: 0.18 }
+    Rectangle {
+        anchors.fill: parent
+        visible: !root.bare
+        color: ThemeConfig.glass
+        opacity: 0.18
+    }
 
     // ---- the theme's own animated clock ------------------------------------
     function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).join("/") }
@@ -94,6 +137,7 @@ Item {
     Loader {
         id: clockLoader
         anchors.fill: parent
+        active: !root.bare        // bare overlays draw their own time
     }
     // setSource so the clock gets `pal` as an initial property, same as the
     // desktop loaders — its bindings never see pal undefined
@@ -121,6 +165,7 @@ Item {
     }
 
     Column {
+        visible: !root.bare       // bare overlays render the dots themselves
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Math.round(parent.height * 0.15)

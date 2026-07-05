@@ -10,7 +10,10 @@ import "../common"
 // additionally ship a lock.qml overlay next to its wallpaper, drawn above the
 // content. The overlay must declare `property var pal` and `property var host`
 // (both injected via setSource) and bind whatever it draws to host.progress /
-// host.unlocking.
+// host.unlocking. An overlay containing the marker `bareLock` takes over all
+// the chrome: the default blur/tint/clock/dots stand down, and host grows
+// pwLength/failed/busy + backgroundItem (the sharp wallpaper/video, for the
+// overlay's own blur regions).
 Item {
     id: stage
 
@@ -44,15 +47,21 @@ Item {
     }
 
     LockContent {
+        id: content
         anchors.fill: parent
         screenName: stage.screenName
         failed: stage.failed
         busy: stage.busy
         resetNonce: stage.resetNonce
+        bare: stage.bareOverlay
         onSubmitted: pw => stage.submitted(pw)
         opacity: stage.progress
         scale: 1.012 - 0.012 * stage.progress
     }
+
+    // surface for bare overlays: password state + the raw background to blur
+    readonly property int pwLength: content.pwLength
+    readonly property Item backgroundItem: content.backgroundItem
 
     // ---- theme overlay (lock.qml in the theme folder) -----------------------
     readonly property string themeDir: {
@@ -61,21 +70,30 @@ Item {
         return ActiveTheme.dirFor(n)
     }
     property string overlayPath: ""
+    // overlay carries the `bareLock` marker → it owns all the lock chrome
+    property bool bareOverlay: false
     property ThemePalette pal: ThemePalette { themeDir: stage.themeDir }
 
     Process {
         id: existProc
         stdout: StdioCollector {
             onStreamFinished: {
-                const p = text.trim()
-                if (p !== stage.overlayPath) { stage.overlayPath = p; stage.remount() }
+                const parts = text.trim().split("\t")
+                const p = parts[0] || ""
+                const bare = parts.length > 1
+                if (p !== stage.overlayPath || bare !== stage.bareOverlay) {
+                    stage.overlayPath = p
+                    stage.bareOverlay = bare
+                    stage.remount()
+                }
             }
         }
     }
     // command built at call time, not bound — the one-behind trap again
     function rescan() {
         existProc.command = ["bash", "-c",
-            'd="$1"; f="$d/lock.qml"; { [ -n "$d" ] && [ -f "$f" ]; } || exit 0; printf "%s" "$f"',
+            'd="$1"; f="$d/lock.qml"; { [ -n "$d" ] && [ -f "$f" ]; } || exit 0; ' +
+            'printf "%s" "$f"; grep -q "bareLock" "$f" && printf "\\tBARE"; true',
             "_", stage.themeDir]
         existProc.running = true
     }
