@@ -54,10 +54,11 @@ Item {
         blurEnabled: true
         blur: 1.0
         blurMax: 40
-        brightness: -0.28
+        // dark themes dim the wallpaper behind the clock; light themes keep it airy
+        brightness: Theme.light ? 0.05 : -0.28
         saturation: 0.05
     }
-    Rectangle { anchors.fill: parent; color: "#05060c"; opacity: 0.18 }
+    Rectangle { anchors.fill: parent; color: ThemeConfig.glass; opacity: 0.18 }
 
     // ---- the theme's own animated clock ------------------------------------
     function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).join("/") }
@@ -134,7 +135,7 @@ Item {
                 model: Math.max(root.pwLength, 1)
                 Rectangle {
                     width: 9; height: 9; radius: 4.5
-                    color: "#d8ecff"
+                    color: Theme.textBright
                     opacity: index < root.pwLength ? 1 : 0
                     scale: root.busy ? 0.7 : 1
                     Behavior on scale { NumberAnimation { duration: 200 } }
@@ -146,8 +147,8 @@ Item {
             opacity: root.pwLength === 0 ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 140 } }
             text: root.failed ? "wrong" : "enter passcode"
-            color: root.failed ? "#ff2e6c" : "#8a8a5c"
-            font.family: "Noto Sans Mono"
+            color: root.failed ? Theme.danger : Theme.textMuted
+            font.family: Theme.mono
             font.italic: true
             font.pixelSize: 15
         }

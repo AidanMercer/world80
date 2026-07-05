@@ -23,7 +23,7 @@ Item {
     readonly property real amp: 26
 
     readonly property color glowColor: ThemeConfig.accent
-    readonly property color coreColor: "#eef1ff"
+    readonly property color coreColor: ThemeConfig.text
 
     Component.onCompleted: {
         const z = []
@@ -191,6 +191,10 @@ Item {
             y: logo.y
             scale: logo.scale
             autoPaddingEnabled: true
+            // the svg ink is white; tint it to the theme's text so it survives
+            // light wallpapers
+            colorization: 1.0
+            colorizationColor: ThemeConfig.text
             shadowEnabled: true
             shadowColor: root.glowColor
             shadowBlur: 0.7

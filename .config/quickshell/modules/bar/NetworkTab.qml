@@ -396,7 +396,7 @@ Item {
                 radius: 9
                 color: Theme.rowHover
                 border.width: 1
-                border.color: root.authFailed ? "#ff2e6c"
+                border.color: root.authFailed ? Theme.danger
                     : (pwInput.activeFocus ? Theme.accent : Theme.divider)
 
                 TextInput {
@@ -410,7 +410,7 @@ Item {
                     font.pixelSize: 13
                     echoMode: showBtn.reveal ? TextInput.Normal : TextInput.Password
                     selectionColor: Theme.accent
-                    selectedTextColor: "#1a1a22"
+                    selectedTextColor: Theme.onAccent
                     clip: true
                     enabled: !root.connecting
 
@@ -458,7 +458,7 @@ Item {
             Text {
                 visible: root.authFailed
                 text: "Wrong password — try again"
-                color: "#ff2e6c"
+                color: Theme.danger
                 font.pixelSize: 10
             }
         }
@@ -491,7 +491,7 @@ Item {
         width: 172
         height: actions.length * rowH + 8
         radius: 12
-        color: Qt.rgba(0.10, 0.10, 0.13, 0.98)
+        color: Theme.menuBg
         border.width: 1
         border.color: Theme.divider
         // clamp inside root; flip above the cursor when it'd overflow the bottom.

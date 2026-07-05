@@ -348,7 +348,7 @@ Item {
         width: 172
         height: actions.length * rowH + 8
         radius: 12
-        color: Qt.rgba(0.10, 0.10, 0.13, 0.98)
+        color: Theme.menuBg
         border.width: 1
         border.color: Theme.divider
         // clamp inside root; flip above the cursor when it'd overflow the bottom.

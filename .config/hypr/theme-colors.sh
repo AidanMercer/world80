@@ -90,8 +90,10 @@ text=${fg}ff
 prompt=${accent2}ff
 input=${fg}ff
 match=${accent}ff
-selection=${dim}ff
-selection-text=${bg}ff
+# translucent row tint + normal fg so the selected row stays readable on
+# light palettes too (opaque dim + bg text only worked on dark themes)
+selection=${dim}55
+selection-text=${fg}ff
 selection-match=${accent}ff
 border=${accent}ff
 

@@ -194,7 +194,7 @@ Item {
             width: parent.width
             height: 156
             radius: 14
-            color: Qt.rgba(0, 0, 0, 0.18)
+            color: Theme.insetBg
             border.color: Theme.divider
             border.width: 1
             clip: true

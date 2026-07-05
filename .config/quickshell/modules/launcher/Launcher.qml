@@ -236,7 +236,7 @@ PanelWindow {
                     color: Theme.textBright
                     font.pixelSize: 16
                     selectionColor: Theme.accent
-                    selectedTextColor: "#1a1a22"
+                    selectedTextColor: Theme.onAccent
                     clip: true
                     focus: true
 

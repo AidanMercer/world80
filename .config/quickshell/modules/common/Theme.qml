@@ -21,21 +21,34 @@ QtObject {
     }
     readonly property color _white: "#ffffff"
 
-    readonly property color glassBg: Qt.rgba(ThemeConfig.glass.r, ThemeConfig.glass.g, ThemeConfig.glass.b, 0.62)
-    readonly property color glassBorder: Qt.rgba(1, 1, 1, 0.24)
-    readonly property color glassHighlight: Qt.rgba(1, 1, 1, 0.10)
+    // light glass flips the overlay direction: white-alpha borders/hovers are
+    // invisible on a near-white panel, so everything derives ink-based instead
+    readonly property bool light: (0.299 * ThemeConfig.glass.r + 0.587 * ThemeConfig.glass.g + 0.114 * ThemeConfig.glass.b) > 0.5
+    readonly property color _boost: light ? Qt.rgba(0, 0, 0, 1) : _white
 
-    readonly property color rowHover: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.07) : Qt.rgba(1, 1, 1, 0.04)
-    readonly property color rowSelected: cyber ? Qt.rgba(neon.r, neon.g, neon.b, 0.15) : Qt.rgba(1, 1, 1, 0.09)
-    readonly property color divider: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.22) : Qt.rgba(1, 1, 1, 0.06)
-    readonly property color dotBorder: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.45) : Qt.rgba(1, 1, 1, 0.22)
-    readonly property color occupiedFill: Qt.rgba(1, 1, 1, 0.08)
-    readonly property color subtleDivider: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.35) : Qt.rgba(1, 1, 1, 0.15)
-    readonly property color trackBg: cyber ? Qt.rgba(neon.r, neon.g, neon.b, 0.10) : Qt.rgba(1, 1, 1, 0.08)
-    readonly property color trackBg2: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.14) : Qt.rgba(1, 1, 1, 0.10)
+    readonly property color glassBg: Qt.rgba(ThemeConfig.glass.r, ThemeConfig.glass.g, ThemeConfig.glass.b, 0.62)
+    readonly property color glassBorder: light ? Qt.rgba(0, 0, 0, 0.13) : Qt.rgba(1, 1, 1, 0.24)
+    readonly property color glassHighlight: Qt.rgba(1, 1, 1, light ? 0.50 : 0.10)
+
+    readonly property color rowHover: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.07) : light ? Qt.rgba(0, 0, 0, 0.05) : Qt.rgba(1, 1, 1, 0.04)
+    readonly property color rowSelected: cyber ? Qt.rgba(neon.r, neon.g, neon.b, 0.15) : light ? Qt.rgba(0, 0, 0, 0.09) : Qt.rgba(1, 1, 1, 0.09)
+    readonly property color divider: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.22) : light ? Qt.rgba(0, 0, 0, 0.10) : Qt.rgba(1, 1, 1, 0.06)
+    readonly property color dotBorder: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.45) : light ? Qt.rgba(0, 0, 0, 0.30) : Qt.rgba(1, 1, 1, 0.22)
+    readonly property color subtleDivider: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.35) : light ? Qt.rgba(0, 0, 0, 0.20) : Qt.rgba(1, 1, 1, 0.15)
+    readonly property color trackBg: cyber ? Qt.rgba(neon.r, neon.g, neon.b, 0.10) : light ? Qt.rgba(0, 0, 0, 0.09) : Qt.rgba(1, 1, 1, 0.08)
+    readonly property color trackBg2: cyber ? Qt.rgba(cyan.r, cyan.g, cyan.b, 0.14) : light ? Qt.rgba(0, 0, 0, 0.12) : Qt.rgba(1, 1, 1, 0.10)
+
+    // near-opaque elevated surface (context menus) and recessed well, glass-derived
+    readonly property color menuBg: {
+        const m = mix(ThemeConfig.glass, _boost, 0.04)
+        return Qt.rgba(m.r, m.g, m.b, 0.98)
+    }
+    readonly property color insetBg: Qt.rgba(0, 0, 0, light ? 0.07 : 0.18)
+    // text that sits ON an accent fill (selections) — picked by accent luminance
+    readonly property color onAccent: (0.299 * neon.r + 0.587 * neon.g + 0.114 * neon.b) > 0.62 ? "#1a1a22" : "#ffffff"
 
     readonly property color textPrimary: ThemeConfig.text
-    readonly property color textBright: mix(ThemeConfig.text, _white, 0.8)
+    readonly property color textBright: mix(ThemeConfig.text, _boost, 0.8)
     readonly property color textSecondary: mix(ThemeConfig.text, ThemeConfig.glass, 0.16)
     readonly property color textTertiary: mix(ThemeConfig.text, ThemeConfig.glass, 0.08)
     readonly property color textMuted: mix(ThemeConfig.text, ThemeConfig.glass, 0.32)
@@ -45,10 +58,10 @@ QtObject {
     readonly property color danger: magenta
     readonly property color warning: amber
     readonly property color dangerHover: Qt.rgba(magenta.r, magenta.g, magenta.b, cyber ? 0.16 : 0.13)
-    readonly property color volGradStart: cyber ? neon : "#8a99e8"
+    readonly property color volGradStart: cyber ? neon : ThemeConfig.accent
     readonly property color volGradEnd: cyan
-    readonly property color volGradMuteStart: "#555"
-    readonly property color volGradMuteEnd: "#666"
+    readonly property color volGradMuteStart: light ? "#a9a6b2" : "#555"
+    readonly property color volGradMuteEnd: light ? "#9b97a7" : "#666"
     readonly property color thumbBorder: cyber ? Qt.rgba(0, 0, 0, 0.55) : Qt.rgba(0, 0, 0, 0.25)
 
     readonly property int barHeight: 44
