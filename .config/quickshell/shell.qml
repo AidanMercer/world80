@@ -23,8 +23,8 @@ ShellRoot {
     // nothing would ever instantiate it and cava would never start.
     readonly property var audioBus: AudioBus
 
-    // Per-monitor video wallpaper: plays the active theme's wallpaper.mp4 over
-    // the still that awww holds (awww can't animate video). Background layer,
+    // Per-monitor video wallpaper: plays the active video variant over the
+    // still that awww holds (awww can't animate video). Background layer,
     // so it stacks under every Bottom-layer scenery widget below.
     Variants {
         model: Quickshell.screens

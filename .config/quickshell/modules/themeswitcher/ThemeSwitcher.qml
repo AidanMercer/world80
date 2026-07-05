@@ -1,36 +1,27 @@
 import QtQuick
+import QtQuick.Effects
+import QtMultimedia
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Widgets
 import Quickshell.Hyprland
 import "../common"
 
-// Fullscreen, transparent layer-shell overlay holding a diagonal coverflow of
-// "themes" along the BOTTOM of the screen. A theme is a folder under
-// ~/.config/themes/<name>/ containing a wallpaper.<ext>. Browse with
-// arrows/scroll, hit Enter (or click a card) to swap the wallpaper via `awww`.
-// No Apply button, no screen dimming — selection is the commit.
-//
-// Layout is a PathView (not a ListView) for two reasons: it positions cards
-// along a path instead of reflowing a layout, so resizing the focused card
-// stays smooth; and it is circular by default, giving an infinite carousel.
-//
-// Each card's FRAME is sheared into a parallelogram (clip:true), while the
-// wallpaper image inside is counter-sheared by the opposite amount about the
-// same centre — the two shears cancel, so the picture renders perfectly
-// upright inside the slanted, clipped window. The current card is wide; the
-// rest are thin slivers, all driven by per-stop Path attributes.
-//
-// Opened/closed over IPC:
-//   qs ipc call themeSwitcher toggle   (wired to Super+Shift+T in hyprland.conf)
-//
-// First increment is deliberately wallpaper-only — no colour regeneration.
+// "Vernissage" — themes hang as matted plates on a horizontal picture rail;
+// the focused plate stays dead-center and the rail slides under it. A theme's
+// wallpaper variants (wallpaper.jpg, wallpaper2.mp4, ...) are a portfolio
+// stack: unchosen sheets peek out as thin paper lips above/below the plate
+// (real slivers of the real wallpapers — count and position read at a
+// glance), Up/Down leafs through them. Enter hangs the sheet; the gallery
+// red dot marks what's actually on the desktop. Focus is size and light;
+// active is the dot. Toggled via `qs ipc call themeSwitcher toggle`.
 PanelWindow {
     id: root
 
     property bool open: false
-    property bool applying: false      // Enter/click → close; fades strip out
-    property bool closing: false       // keep mapped through the close fade
+    property bool applying: false
+    property bool closing: false
 
     property var targetScreen: null
     screen: targetScreen
@@ -44,105 +35,192 @@ PanelWindow {
     color: "transparent"
     visible: open || closing
 
-    // ---- card geometry -------------------------------------------------
-    readonly property real centreWidth: 450    // focused card width
-    readonly property real sideWidth: 150       // sliver width
-    readonly property real centreHeight: 390
-    readonly property real sideHeight: 360
-    readonly property real skewFactor: -0.32    // leans the frame like "/"
-    // Carousel spans a FIXED pixel width centred on screen, so the gap between
-    // cards is identical on every monitor. (Previously the path ran the full
-    // view.width, so slivers flew apart on the ultrawide and bunched on small
-    // screens — spacing was view.width / pathItemCount.)
-    readonly property real pathSpan: 1300       // tight enough that every card overlaps its
-                                                 // neighbour. With no background showing through,
-                                                 // each card exposes an equal-width slice → even
-                                                 // rhythm, while the wide centre card (highest z)
-                                                 // sits on top and overlaps both its neighbours.
-    // Image is oversized so the counter-shear never exposes an edge.
-    readonly property real imgW: centreWidth + (centreHeight * Math.abs(skewFactor)) + 60
-    readonly property real imgH: centreHeight
+    readonly property int imgW: 880
+    readonly property int imgH: 550
+    readonly property int mat: 14
+    readonly property int cardW: imgW + mat * 2
+    readonly property int cardH: imgH + mat * 2
+    readonly property int smallW: 352 + mat * 2
+    readonly property int smallH: 220 + mat * 2
+    readonly property int railGap: 28
+    readonly property real hangY: height * 0.46
+    readonly property int lipH: 12
+    readonly property int lipStep: 13
+    readonly property int lipInset: 24
 
-    // ---- data ----------------------------------------------------------
-    ListModel { id: themeModel }
+    // themes: [{ name, dir, accent, accent2, accent3, walls: [{path, thumb, video}] }]
+    property var themes: []
+    property int cur: 0
+    property var varSel: []        // per-theme selected variant
+    property int activeTheme: -1   // what's on the desktop (the red dot)
+    property int activeVar: -1
+    property int navMs: 260        // key-repeat compresses this
+    property real bounceX: 0
+    property real bounceY: 0
 
+    // one scan finds each theme's wallpaper*.* variants (skipping *.still.png
+    // extractions), makes missing video stills, and grabs the theme's own
+    // accents from config.toml so plates can carry their own palette
     Process {
         id: scanProc
         running: false
         command: ["bash", "-c",
-            'shopt -s nullglob; for d in "$HOME"/.config/themes/*/; do ' +
-            'name=$(basename "$d"); ' +
-            'for f in "$d"wallpaper.jpg "$d"wallpaper.jpeg "$d"wallpaper.png "$d"wallpaper.webp "$d"wallpaper.gif "$d"wallpaper.mp4; do ' +
-            // video themes can't render in an Image — card shows the still instead
-            '[ -e "$f" ] && { t="$f"; case "$f" in *.mp4) [ -e "${d}still.png" ] && t="${d}still.png";; esac; ' +
-            'printf "%s\\t%s\\t%s\\n" "$name" "$f" "$t"; break; }; done; done']
+            'shopt -s nullglob; ' +
+            'get() { grep -m1 -oiP "^\\s*$1\\s*=\\s*[\\"\']?#\\K[0-9a-fA-F]{6}" "$cfg" 2>/dev/null; true; }; ' +
+            'for d in "$HOME"/.config/themes/*/; do ' +
+            '  name=$(basename "$d"); ' +
+            '  walls=$(ls "$d" 2>/dev/null | grep -E "^wallpaper[0-9]*\\.(jpg|jpeg|png|webp|gif|mp4)$" | sort -V); ' +
+            '  [ -n "$walls" ] || continue; ' +
+            '  cfg="$d/config.toml"; ' +
+            '  printf "T\\t%s\\t%s\\t%s\\t%s\\t%s\\n" "$name" "${d%/}" "$(get accent)" "$(get accent2)" "$(get accent3)"; ' +
+            '  while IFS= read -r w; do f="$d$w"; case "$f" in ' +
+            '    *.mp4) s="${f%.mp4}.still.png"; ' +
+            '           [ -f "$s" ] || ffmpeg -y -v error -i "$f" -frames:v 1 "$s" </dev/null; ' +
+            '           printf "V\\t%s\\t%s\\t1\\n" "$f" "$s";; ' +
+            '    *)     printf "V\\t%s\\t%s\\t0\\n" "$f" "$f";; ' +
+            '  esac; done <<< "$walls"; ' +
+            'done']
         stdout: StdioCollector {
             onStreamFinished: root.loadThemes(text)
         }
     }
 
+    property string _fingerprint: ""
+    property string _pendingApply: ""
     function loadThemes(out) {
-        themeModel.clear()
-        const lines = (out || "").trim().split("\n").filter(l => l.length)
-        for (const line of lines) {
-            const parts = line.split("\t")
-            if (parts.length >= 2)
-                themeModel.append({ name: parts[0], wallpaper: parts[1],
-                                    thumb: parts[2] || parts[1] })
+        const hadNone = themes.length === 0
+        const arr = []
+        let t = null
+        for (const line of (out || "").split("\n")) {
+            const p = line.split("\t")
+            if (p[0] === "T" && p.length >= 3) {
+                t = { name: p[1], dir: p[2], accent: p[3] || "", accent2: p[4] || "",
+                      accent3: p[5] || "", walls: [] }
+                arr.push(t)
+            } else if (p[0] === "V" && p.length >= 4 && t) {
+                t.walls.push({ path: p[1], thumb: p[2], video: p[3] === "1" })
+            }
+        }
+        // don't recreate delegates (and replay their entrance) when disk is unchanged
+        const fp = JSON.stringify(arr)
+        if (fp !== _fingerprint) {
+            _fingerprint = fp
+            themes = arr
+        }
+        syncActive()
+        if (cur >= themes.length) cur = Math.max(0, themes.length - 1)
+        if (hadNone && open && activeTheme >= 0) cur = activeTheme
+        if (_pendingApply !== "") {
+            const n = _pendingApply
+            _pendingApply = ""
+            applyByName(n)
         }
     }
 
-    // Encode each path segment so spaces ("your name/") survive the file URL.
+    // awww holds either the image itself or a video's extracted still — match both
+    function syncActive() {
+        const mon = targetScreen ? targetScreen.name
+                  : (Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : "")
+        const img = ActiveTheme.imgFor(mon)
+        activeTheme = -1
+        activeVar = -1
+        for (let i = 0; i < themes.length; i++)
+            for (let j = 0; j < themes[i].walls.length; j++) {
+                const w = themes[i].walls[j]
+                if (w.path === img || w.thumb === img) { activeTheme = i; activeVar = j }
+            }
+        if (varSel.length !== themes.length) {
+            const sel = themes.map(() => 0)
+            if (activeTheme >= 0) sel[activeTheme] = activeVar
+            varSel = sel
+        }
+    }
+
+    Connections {
+        target: ActiveTheme
+        function onMapChanged() { if (!root.applying) root.syncActive() }
+    }
+
     function fileUrl(p) {
         return "file://" + p.split("/").map(encodeURIComponent).join("/")
     }
+    function pad2(n) { return (n < 10 ? "0" : "") + n }
+    function roman(n) {
+        return ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][n - 1] || String(n)
+    }
 
-    // ---- lifecycle -----------------------------------------------------
     function openMenu() {
         const m = Hyprland.focusedMonitor
         targetScreen = m ? (Quickshell.screens.find(s => s.name === m.name) ?? null) : null
         applying = false
         closing = false
+        varSel = []                // rest every stack on its active sheet
+        syncActive()
         open = true
-        scanProc.running = true            // rescan each open so new folders show
-        Qt.callLater(() => { view.currentIndex = 0; keyCatcher.forceActiveFocus() })
+        cur = activeTheme >= 0 ? activeTheme : 0
+        scanProc.running = true    // rescan each open so new folders show
+        Qt.callLater(() => keyCatcher.forceActiveFocus())
     }
     function closeMenu() {
         if (!open) return
         open = false
         closing = true
+        applying = false   // or the theme IPC stays dead until the next open
         closeHold.restart()
     }
-    Timer { id: closeHold; interval: 260; onTriggered: root.closing = false }
+    Timer { id: closeHold; interval: 300; onTriggered: root.closing = false }
 
-    // Wrapping increment/decrement → infinite carousel.
-    function moveSel(delta) {
-        if (themeModel.count === 0) return
-        if (delta > 0) view.incrementCurrentIndex()
-        else view.decrementCurrentIndex()
+    // no wrap: the ends answer with a refusal bounce
+    function moveTheme(d) {
+        if (themes.length === 0) return
+        const n = cur + d
+        if (n < 0 || n >= themes.length) { railRefusal.dir = d; railRefusal.restart(); return }
+        cur = n
+    }
+    function moveVar(d) {
+        if (themes.length === 0) return
+        const v = (varSel[cur] ?? 0) + d
+        if (v < 0 || v >= themes[cur].walls.length) { stackRefusal.dir = d; stackRefusal.restart(); return }
+        const s = varSel.slice()
+        s[cur] = v
+        varSel = s
+    }
+    SequentialAnimation {
+        id: railRefusal
+        property int dir: 1
+        NumberAnimation { target: root; property: "bounceX"; to: -railRefusal.dir * 10; duration: 80; easing.type: Easing.OutCubic }
+        NumberAnimation { target: root; property: "bounceX"; to: 0; duration: 140; easing.type: Easing.OutBack }
+    }
+    SequentialAnimation {
+        id: stackRefusal
+        property int dir: 1
+        NumberAnimation { target: root; property: "bounceY"; to: stackRefusal.dir * 8; duration: 80; easing.type: Easing.OutCubic }
+        NumberAnimation { target: root; property: "bounceY"; to: 0; duration: 140; easing.type: Easing.OutBack }
     }
 
     function applyTheme() {
-        if (applying || themeModel.count === 0) return
-        const i = view.currentIndex
-        if (i < 0 || i >= themeModel.count) return
-        const t = themeModel.get(i)
-        if (!t || !t.wallpaper) return
+        if (applying || themes.length === 0) return
+        const t = themes[cur]
+        const w = t.walls[varSel[cur] ?? 0]
+        if (!w) return
         applying = true
-        applyWallpaper(t.wallpaper)
+        activeTheme = cur          // the sticker is pressed on optimistically
+        activeVar = varSel[cur] ?? 0
+        applyWatchdog.restart()
+        applyWallpaper(w.path)
     }
+    Timer { id: applyWatchdog; interval: 6000; onTriggered: if (root.applying) root.closeMenu() }
 
-    // Swap to a wallpaper path — shared by the overlay and the `theme` IPC. The
-    // applyProc.onExited handler fans out to the per-theme widgets + retints apps.
-    // awww can't animate video, so an mp4 theme is applied as its first frame
-    // (still.png, generated on first switch) — query/lock/loaders all keep
-    // working off the still, and VideoWall plays the actual video over it.
+    // awww can't animate video, so an mp4 variant is applied as its extracted
+    // still — loaders/lock/query keep working off it, VideoWall plays the real
+    // video on top. Command built at call time, not bound (one-behind trap).
     function applyWallpaper(wallpaper) {
         if (!wallpaper) return
+        if (applyProc.running) return   // don't clobber pendingThemeDir mid-flight
         root.pendingThemeDir = wallpaper.substring(0, wallpaper.lastIndexOf("/"))
         if (wallpaper.endsWith(".mp4")) {
             applyProc.command = ["bash", "-c",
-                'v="$1"; s="${v%/*}/still.png"; ' +
+                'v="$1"; s="${v%.mp4}.still.png"; ' +
                 '[ -f "$s" ] || ffmpeg -y -v error -i "$v" -frames:v 1 "$s"; ' +
                 'awww img --transition-type fade --transition-duration 0.7 "$s"',
                 "_", wallpaper]
@@ -157,50 +235,61 @@ PanelWindow {
 
     property string pendingThemeDir: ""
 
-    // --- headless theme switching over IPC (no overlay) -----------------
-    // qs ipc call theme next | prev | apply <name> | current
-    // "Current" is whatever awww is actually showing on the focused monitor
-    // (via ActiveTheme), so next/prev cycle relative to reality, not the carousel.
-    function _indexOfDir(dir) {
-        for (let i = 0; i < themeModel.count; i++) {
-            const w = themeModel.get(i).wallpaper
-            if (w && w.substring(0, w.lastIndexOf("/")) === dir) return i
-        }
-        return -1
-    }
-    function cycleTheme(delta) {
-        if (applying || themeModel.count === 0) return
-        let i = _indexOfDir(ActiveTheme.focusedDir)
-        i = (i < 0) ? 0 : ((i + delta) % themeModel.count + themeModel.count) % themeModel.count
-        const t = themeModel.get(i)
-        if (t && t.wallpaper) applyWallpaper(t.wallpaper)
-    }
-    function applyByName(name) {
-        if (applying) return
-        for (let i = 0; i < themeModel.count; i++) {
-            const t = themeModel.get(i)
-            if (t.name === name) { applyWallpaper(t.wallpaper); return }
-        }
-    }
-
     Process {
         id: applyProc
         running: false
         onExited: (code, status) => {
-            ControlBus.notifyWallpaperChanged()   // let per-theme widgets reload
+            applyWatchdog.stop()
+            ControlBus.notifyWallpaperChanged()
             colorProc.command = ["bash", "-c",
                 '"$HOME/dotfiles/.config/hypr/theme-colors.sh" "$1"', "_", root.pendingThemeDir]
-            colorProc.running = true              // re-tint kitty/fuzzel/hyprlock
-            root.closeMenu()
+            colorProc.running = true
+            applyHold.restart()    // let the dot pop land before leaving
         }
     }
+    Timer { id: applyHold; interval: 200; onTriggered: root.closeMenu() }
 
-    // regenerates the per-theme app palettes once the wallpaper has swapped
     Process { id: colorProc; running: false }
+
+    // headless: qs ipc call theme next | prev | apply <name> | current
+    function _indexOfDir(dir) {
+        for (let i = 0; i < themes.length; i++)
+            if (themes[i].dir === dir) return i
+        return -1
+    }
+    function cycleTheme(delta) {
+        if (applying || themes.length === 0) return
+        let i = _indexOfDir(ActiveTheme.focusedDir)
+        i = (i < 0) ? 0 : ((i + delta) % themes.length + themes.length) % themes.length
+        const w = themes[i].walls[0]
+        if (w) applyWallpaper(w.path)
+    }
+    function applyByName(name) {
+        if (applying) return
+        if (themes.length === 0) {      // login race: scan hasn't landed yet
+            _pendingApply = name
+            scanProc.running = true
+            return
+        }
+        for (const t of themes)
+            if (t.name === name) {
+                if (t.walls[0]) applyWallpaper(t.walls[0].path)
+                return
+            }
+    }
 
     IpcHandler {
         target: "themeSwitcher"
         function toggle(): void { root.open ? root.closeMenu() : root.openMenu() }
+        function nav(dir: string): void {
+            if (!root.open || root.applying) return
+            root.navMs = 260
+            if (dir === "left") root.moveTheme(-1)
+            else if (dir === "right") root.moveTheme(1)
+            else if (dir === "up") root.moveVar(-1)
+            else if (dir === "down") root.moveVar(1)
+        }
+        function select(): void { if (root.open) root.applyTheme() }
     }
 
     IpcHandler {
@@ -214,169 +303,549 @@ PanelWindow {
         }
     }
 
-    // scan once at startup so the `theme` IPC has the list before the overlay opens
     Component.onCompleted: scanProc.running = true
 
-    // ---- keyboard ------------------------------------------------------
     Item {
         id: keyCatcher
         anchors.fill: parent
         focus: true
         Keys.onPressed: (e) => {
+            // escape works even mid-apply so a wedged awww can't trap the grab
+            if (e.key === Qt.Key_Escape) { root.closeMenu(); e.accepted = true; return }
             if (root.applying) { e.accepted = true; return }
-            if (e.key === Qt.Key_Left || e.key === Qt.Key_Up) { root.moveSel(-1); e.accepted = true }
-            else if (e.key === Qt.Key_Right || e.key === Qt.Key_Down) { root.moveSel(1); e.accepted = true }
+            root.navMs = e.isAutoRepeat ? 140 : 260
+            if (e.key === Qt.Key_Left) { root.moveTheme(-1); e.accepted = true }
+            else if (e.key === Qt.Key_Right) { root.moveTheme(1); e.accepted = true }
+            else if (e.key === Qt.Key_Up) { root.moveVar(-1); e.accepted = true }
+            else if (e.key === Qt.Key_Down) { root.moveVar(1); e.accepted = true }
             else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.applyTheme(); e.accepted = true }
-            else if (e.key === Qt.Key_Escape) { root.closeMenu(); e.accepted = true }
         }
     }
 
-    // ---- transparent click-outside-to-cancel (no dimming) --------------
+    // gallery lighting, not frost: 0.08 stays under hyprland's 0.1 blur threshold
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.light ? "#ffffff" : "#000000"
+        opacity: root.open ? 0.08 : 0
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+    }
+
     MouseArea {
         anchors.fill: parent
         onClicked: if (!root.applying) root.closeMenu()
+        // wheel over the focused plate leafs its stack; anywhere else, the rail
+        property int accum: 0
+        onWheel: (wheel) => {
+            if (root.applying || !root.open) { wheel.accepted = true; return }
+            if (wheelThrottle.running) { wheel.accepted = true; return }
+            const dy = wheel.angleDelta.y
+            const dx = wheel.angleDelta.x
+            const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy
+            accum += delta
+            if (Math.abs(accum) >= 120) {
+                const overPlate =
+                    Math.abs(wheel.x - root.width / 2) < root.cardW / 2 &&
+                    Math.abs(wheel.y - root.hangY) < root.cardH / 2 + 60
+                root.navMs = 200
+                if (overPlate && root.themes.length > 0
+                        && root.themes[root.cur].walls.length > 1)
+                    root.moveVar(accum > 0 ? -1 : 1)
+                else
+                    root.moveTheme(accum > 0 ? -1 : 1)
+                accum = 0
+                wheelThrottle.restart()
+            }
+            wheel.accepted = true
+        }
+        Timer { id: wheelThrottle; interval: 150 }
     }
 
-    // ---- the bottom filmstrip ------------------------------------------
     Item {
         id: content
         anchors.fill: parent
-        opacity: root.open && !root.applying ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+        opacity: root.open ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: root.open ? 200 : 250; easing.type: root.open ? Easing.OutCubic : Easing.InCubic } }
+
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: root.hangY - font.pixelSize
+            visible: root.themes.length === 0
+            horizontalAlignment: Text.AlignHCenter
+            color: Theme.textSecondary
+            font.family: Theme.mono
+            font.pixelSize: 15
+            text: "The collection is empty.\nDrop a folder with a wallpaper.<ext> into ~/.config/themes/"
+        }
+
+        Repeater {
+            model: root.themes
+
+            delegate: Item {
+                id: plate
+                required property var modelData
+                required property int index
+
+                readonly property int offset: index - root.cur
+                readonly property bool focusedPlate: offset === 0
+                readonly property bool activePlate: index === root.activeTheme
+                readonly property int varIdx: root.varSel[index] ?? 0
+                readonly property var wall: modelData.walls[varIdx] ?? modelData.walls[0]
+                readonly property color ownAccent: modelData.accent !== ""
+                                                   ? "#" + modelData.accent : Theme.accent
+
+                width: focusedPlate ? root.cardW : root.smallW
+                height: focusedPlate ? root.cardH : root.smallH
+                Behavior on width { NumberAnimation { duration: root.navMs; easing.type: Easing.OutQuint } }
+                Behavior on height { NumberAnimation { duration: root.navMs; easing.type: Easing.OutQuint } }
+
+                readonly property real railX: offset === 0 ? 0
+                    : (offset > 0 ? 1 : -1) * (root.cardW / 2 + root.railGap
+                        + (Math.abs(offset) - 1) * (root.smallW + root.railGap)
+                        + root.smallW / 2)
+                x: root.width / 2 + railX + root.bounceX - width / 2
+                y: root.hangY - height / 2 + (focusedPlate ? root.bounceY : 0)
+                Behavior on x { NumberAnimation { duration: root.navMs; easing.type: Easing.OutQuint } }
+
+                z: focusedPlate ? 10 : (5 - Math.abs(offset))
+                visible: Math.abs(offset) <= 4
+                opacity: Math.abs(offset) >= 2 ? 0.25 : 1
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                // entrance: plates rise into place, focused first, outward stagger
+                transform: Translate {
+                    y: root.open ? 0 : 14
+                    Behavior on y {
+                        SequentialAnimation {
+                            PauseAnimation { duration: root.open ? Math.min(Math.abs(plate.offset), 3) * 30 : 0 }
+                            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                        }
+                    }
+                }
+
+                scale: root.applying && focusedPlate ? 1.03 : 1
+                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                RectangularShadow {
+                    anchors.fill: matRect
+                    radius: matRect.radius
+                    blur: 48
+                    offset: Qt.vector2d(0, 24)
+                    color: Qt.rgba(0, 0, 0, 0.30)
+                    opacity: plate.focusedPlate ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+
+                // paper lips: sheets tucked behind the plate. lips above = variants
+                // above you; each is a real sliver of that variant's wallpaper
+                Repeater {
+                    model: root.visible && plate.focusedPlate ? plate.modelData.walls.length : 0
+                    delegate: Item {
+                        id: lip
+                        required property int index
+                        readonly property var lipWall: plate.modelData.walls[index]
+                        readonly property bool above: index < plate.varIdx
+                        readonly property int depth: above ? plate.varIdx - index
+                                                           : index - plate.varIdx
+                        visible: index !== plate.varIdx
+                        width: plate.width - root.lipInset * 2
+                        height: root.lipH
+                        x: root.lipInset
+                        y: above ? -(depth * root.lipStep)
+                                 : plate.height + depth * root.lipStep - root.lipH
+                        z: -depth
+                        Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+                        Item {
+                            anchors.fill: parent
+                            clip: true
+                            Image {
+                                width: lip.width
+                                height: Math.max(1, lip.width * root.imgH / root.imgW)
+                                y: lip.above ? 0 : root.lipH - height
+                                source: lip.lipWall ? root.fileUrl(lip.lipWall.thumb) : ""
+                                // same sourceSize as the plate → shared texture
+                                sourceSize: Qt.size(root.imgW, root.imgH)
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                border.color: Theme.glassBorder
+                                border.width: 1
+                            }
+                            Text {
+                                visible: lip.lipWall ? lip.lipWall.video : false
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "▶"
+                                font.pixelSize: 7
+                                color: Theme.textBright
+                                style: Text.Outline
+                                styleColor: Qt.rgba(0, 0, 0, 0.5)
+                            }
+                            // the red dot rides the exact sheet that's on view
+                            Rectangle {
+                                visible: plate.activePlate && lip.index === root.activeVar
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 6; height: 6; radius: 3
+                                color: plate.ownAccent
+                                border.color: Qt.rgba(0, 0, 0, 0.4)
+                                border.width: 1
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.navMs = 260
+                                const s = root.varSel.slice()
+                                s[plate.index] = lip.index
+                                root.varSel = s
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: matRect
+                    anchors.fill: parent
+                    radius: 20
+                    color: Theme.glassBg
+                    border.color: Theme.glassBorder
+                    border.width: 1
+
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.topMargin: 1
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: parent.radius
+                        anchors.rightMargin: parent.radius
+                        height: 1
+                        color: Theme.glassHighlight
+                    }
+
+                    ClippingRectangle {
+                        anchors.fill: parent
+                        anchors.margins: root.mat
+                        radius: 8
+                        color: "transparent"
+
+                        // two-image leaf: the incoming sheet drops in from the side
+                        // it was tucked on while the old one fades under it
+                        Item {
+                            id: sheets
+                            anchors.fill: parent
+                            property string shown: ""
+                            property Image front: imgA
+                            property Image back: imgB
+                            property int lastVar: -1
+
+                            function syncSheet() {
+                                if (!plate.wall || !root.visible) return
+                                const dir = lastVar < 0 ? 0 : (plate.varIdx < lastVar ? -1 : 1)
+                                lastVar = plate.varIdx
+                                leaf(root.fileUrl(plate.wall.thumb), dir)
+                            }
+                            // drop the decoded pixmaps while the room is closed
+                            function unload() {
+                                shown = ""
+                                lastVar = -1
+                                imgA.source = ""
+                                imgB.source = ""
+                            }
+                            function leaf(src, dir) {
+                                if (src === shown) return
+                                shown = src
+                                if (leafAnim.running) leafAnim.complete()
+                                const f = front
+                                front = back
+                                back = f
+                                front.z = 1
+                                back.z = 0
+                                front.source = src
+                                leafAnim.dir = dir
+                                leafAnim.restart()
+                            }
+                            ParallelAnimation {
+                                id: leafAnim
+                                property int dir: 0
+                                NumberAnimation {
+                                    target: sheets.front; property: "y"
+                                    from: leafAnim.dir * 40; to: 0
+                                    duration: root.navMs; easing.type: Easing.OutCubic
+                                }
+                                NumberAnimation {
+                                    target: sheets.front; property: "opacity"
+                                    from: 0; to: 1
+                                    duration: root.navMs; easing.type: Easing.OutCubic
+                                }
+                                NumberAnimation {
+                                    target: sheets.back; property: "opacity"
+                                    from: 1; to: 0
+                                    duration: Math.round(root.navMs * 0.75)
+                                }
+                            }
+
+                            Image {
+                                id: imgA
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: parent.width
+                                height: parent.height
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize: Qt.size(root.imgW, root.imgH)
+                                asynchronous: true
+                                cache: true
+                                smooth: true
+                            }
+                            Image {
+                                id: imgB
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: parent.width
+                                height: parent.height
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize: Qt.size(root.imgW, root.imgH)
+                                asynchronous: true
+                                cache: true
+                                smooth: true
+                            }
+
+                            Connections {
+                                target: plate
+                                function onWallChanged() { sheets.syncSheet() }
+                            }
+                            Connections {
+                                target: root
+                                function onVisibleChanged() { root.visible ? sheets.syncSheet() : sheets.unload() }
+                            }
+                            Component.onCompleted: syncSheet()
+                        }
+
+                        // a focused motion study starts moving under your gaze:
+                        // one muted player, mounted only after a 400ms dwell
+                        Loader {
+                            anchors.fill: parent
+                            active: plate.focusedPlate && plate.wall && plate.wall.video
+                                    && root.open && !root.applying && dwell.settled
+                            sourceComponent: Item {
+                                anchors.fill: parent
+                                MediaPlayer {
+                                    source: root.fileUrl(plate.wall.path)
+                                    videoOutput: previewOut
+                                    loops: MediaPlayer.Infinite
+                                    Component.onCompleted: play()
+                                }
+                                VideoOutput {
+                                    id: previewOut
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    opacity: 0
+                                    NumberAnimation on opacity { to: 1; duration: 300 }
+                                }
+                            }
+                        }
+                    }
+
+                    // glassine veil: resting prints sleep under tissue
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: Theme.light ? Qt.rgba(0.06, 0.05, 0.09, 0.10)
+                                           : Qt.rgba(1, 1, 1, 0.10)
+                        opacity: plate.focusedPlate ? 0 : 1
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                    }
+
+                    // the collector's dot: this theme is on the desktop
+                    Rectangle {
+                        visible: plate.activePlate
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 16
+                        anchors.bottomMargin: 16
+                        width: 9; height: 9; radius: 4.5
+                        color: plate.ownAccent
+                        border.color: Qt.rgba(0, 0, 0, 0.4)
+                        border.width: 1
+                        scale: root.applying && plate.focusedPlate ? 1.6 : 1
+                        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                    }
+
+                    // press-proof swatches: the theme's own palette
+                    Row {
+                        visible: plate.focusedPlate && plate.modelData.accent !== ""
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.rightMargin: 16
+                        anchors.bottomMargin: 16
+                        spacing: 1
+                        Repeater {
+                            model: [plate.modelData.accent, plate.modelData.accent2,
+                                    plate.modelData.accent3].filter(c => c !== "")
+                            Rectangle {
+                                required property string modelData
+                                width: 10; height: 10
+                                color: "#" + modelData
+                                border.color: Qt.rgba(0, 0, 0, 0.35)
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        visible: plate.focusedPlate && plate.wall && plate.wall.video
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.rightMargin: 16
+                        anchors.topMargin: 16
+                        width: 20; height: 20; radius: 10
+                        color: Qt.rgba(0, 0, 0, 0.35)
+                        border.color: Theme.glassBorder
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            anchors.horizontalCenterOffset: 1
+                            text: "▶"
+                            font.pixelSize: 8
+                            color: "#ffffff"
+                        }
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: matRect
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.applying) return
+                        root.navMs = 260
+                        if (plate.focusedPlate) root.applyTheme()
+                        else root.cur = plate.index
+                    }
+                }
+            }
+        }
+
+        Timer { id: dwell; interval: 400; property bool settled: false; onTriggered: settled = true }
+        Connections {
+            target: root
+            function onCurChanged() { dwell.settled = false; dwell.restart() }
+            function onVarSelChanged() { dwell.settled = false; dwell.restart() }
+            function onOpenChanged() { dwell.settled = false; if (root.open) dwell.restart() }
+        }
+
+        // the wall label: left-set under the plate like a gallery placard
+        Item {
+            id: wallLabel
+            x: root.width / 2 - root.cardW / 2
+            y: root.hangY + root.cardH / 2 + 64   // clears a 4-deep lip stack
+            width: root.cardW
+            height: 92
+            visible: root.themes.length > 0
+
+            property int shownCur: 0
+            Connections {
+                target: root
+                function onCurChanged() { labelSwap.restart() }
+                function onThemesChanged() {
+                    wallLabel.shownCur = Math.min(wallLabel.shownCur, Math.max(0, root.themes.length - 1))
+                }
+            }
+            SequentialAnimation {
+                id: labelSwap
+                ParallelAnimation {
+                    NumberAnimation { target: labelCol; property: "opacity"; to: 0; duration: 100; easing.type: Easing.InCubic }
+                    NumberAnimation { target: labelCol; property: "y"; to: 8; duration: 100; easing.type: Easing.InCubic }
+                }
+                ScriptAction { script: wallLabel.shownCur = root.cur }
+                ParallelAnimation {
+                    NumberAnimation { target: labelCol; property: "opacity"; to: 1; duration: 140; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: labelCol; property: "y"; from: -8; to: 0; duration: 140; easing.type: Easing.OutCubic }
+                }
+            }
+
+            readonly property var shownTheme: root.themes[shownCur] ?? null
+            readonly property int shownVar: root.varSel[shownCur] ?? 0
+            readonly property var shownWall: shownTheme ? (shownTheme.walls[shownVar] ?? null) : null
+
+            // raised style keeps the placard readable over busy desktops
+            readonly property color emboss: Theme.light ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(0, 0, 0, 0.6)
+
+            Column {
+                id: labelCol
+                spacing: 7
+
+                Text {
+                    text: {
+                        if (!wallLabel.shownTheme) return ""
+                        let s = "COLLECTION · " + root.pad2(wallLabel.shownCur + 1)
+                              + " / " + root.pad2(root.themes.length)
+                        if (wallLabel.shownCur === root.activeTheme
+                                && (root.varSel[wallLabel.shownCur] ?? 0) === root.activeVar)
+                            s += " · ON VIEW"
+                        return s
+                    }
+                    font.family: Theme.mono
+                    font.pixelSize: 11
+                    font.letterSpacing: 2.2
+                    color: Theme.textMuted
+                    style: Text.Raised
+                    styleColor: wallLabel.emboss
+                }
+                Column {
+                    spacing: 5
+                    Text {
+                        id: nameText
+                        text: wallLabel.shownTheme ? wallLabel.shownTheme.name : ""
+                        font.family: Theme.mono
+                        font.pixelSize: 30
+                        font.weight: Font.Medium
+                        font.letterSpacing: -0.5
+                        color: Theme.textBright
+                        style: Text.Raised
+                        styleColor: wallLabel.emboss
+                    }
+                    Rectangle {
+                        width: nameText.paintedWidth
+                        height: 2
+                        color: wallLabel.shownTheme && wallLabel.shownTheme.accent !== ""
+                               ? "#" + wallLabel.shownTheme.accent : Theme.accent
+                    }
+                }
+                Text {
+                    visible: wallLabel.shownTheme ? wallLabel.shownTheme.walls.length > 1 : false
+                    text: {
+                        if (!wallLabel.shownTheme || !wallLabel.shownWall) return ""
+                        return "Plate " + root.roman(wallLabel.shownVar + 1)
+                             + " / " + root.roman(wallLabel.shownTheme.walls.length)
+                             + " · " + (wallLabel.shownWall.video ? "motion" : "still")
+                    }
+                    font.family: Theme.mono
+                    font.pixelSize: 13
+                    color: Theme.textSecondary
+                    style: Text.Raised
+                    styleColor: wallLabel.emboss
+                }
+            }
+        }
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: parent.height * 0.22
-            visible: themeModel.count === 0
-            horizontalAlignment: Text.AlignHCenter
-            color: Theme.textSecondary
-            font.pixelSize: 15
-            text: "No themes found.\nDrop a folder with a wallpaper.<ext> into ~/.config/themes/"
-        }
-
-        PathView {
-            id: view
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: Math.round(parent.height * 0.09)
-            height: root.centreHeight + 70
-            visible: themeModel.count > 0
-
-            model: themeModel
-            // Never exceed the theme count: if pathItemCount > model count,
-            // PathView reserves an empty slot for the "missing" item, leaving a
-            // gap in the carousel (looks like uneven spacing). Cap at 7.
-            pathItemCount: Math.min(themeModel.count, 7)
-            preferredHighlightBegin: 0.5
-            preferredHighlightEnd: 0.5
-            highlightRangeMode: PathView.StrictlyEnforceRange
-            snapMode: PathView.SnapToItem
-            highlightMoveDuration: 320
-            interactive: false                 // driven by keys / wheel
-
-            // Straight horizontal path; cards interpolate width/height/opacity
-            // between the dim thin edges and the wide bright centre.
-            path: Path {
-                startX: view.width / 2 - root.pathSpan / 2; startY: view.height / 2
-                PathAttribute { name: "iwide"; value: root.sideWidth }
-                PathAttribute { name: "ihigh"; value: root.sideHeight }
-                PathAttribute { name: "iz";    value: 0 }
-                PathLine { x: view.width / 2; y: view.height / 2 }
-                PathAttribute { name: "iwide"; value: root.centreWidth }
-                PathAttribute { name: "ihigh"; value: root.centreHeight }
-                PathAttribute { name: "iz";    value: 10 }
-                PathLine { x: view.width / 2 + root.pathSpan / 2; y: view.height / 2 }
-                PathAttribute { name: "iwide"; value: root.sideWidth }
-                PathAttribute { name: "ihigh"; value: root.sideHeight }
-                PathAttribute { name: "iz";    value: 0 }
-            }
-
-            // Scroll wheel without swallowing clicks (NoButton).
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.NoButton
-                property int accum: 0
-                onWheel: (wheel) => {
-                    if (root.applying) { wheel.accepted = true; return }
-                    if (wheelThrottle.running) { wheel.accepted = true; return }
-                    const dy = wheel.angleDelta.y
-                    const dx = wheel.angleDelta.x
-                    const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy
-                    accum += delta
-                    if (Math.abs(accum) >= 120) {
-                        root.moveSel(accum > 0 ? -1 : 1)
-                        accum = 0
-                        wheelThrottle.start()
-                    }
-                    wheel.accepted = true
-                }
-            }
-            Timer { id: wheelThrottle; interval: 130 }
-
-            delegate: Item {
-                id: card
-                required property string name
-                required property string wallpaper
-                required property string thumb
-                required property int index
-                // PathView positions us by our centre; size/opacity come from
-                // the interpolated path attributes (no layout reflow → smooth).
-                width: PathView.iwide ?? root.sideWidth
-                height: PathView.ihigh ?? root.sideHeight
-                z: PathView.iz ?? 0
-
-                // Sheared parallelogram frame; clip masks the upright image to it.
-                Item {
-                    id: frame
-                    anchors.fill: parent
-                    clip: true
-                    transform: Matrix4x4 {
-                        // Centred shear: x' = x + s*(y - h/2).
-                        readonly property real s: root.skewFactor
-                        matrix: Qt.matrix4x4(1, s, 0, -s * frame.height / 2,
-                                             0, 1, 0, 0,
-                                             0, 0, 1, 0,
-                                             0, 0, 0, 1)
-                    }
-
-                    Image {
-                        anchors.centerIn: parent
-                        width: root.imgW
-                        height: root.imgH
-                        fillMode: Image.PreserveAspectCrop
-                        source: root.fileUrl(card.thumb)
-                        // Decode each wallpaper ONCE at display size. Without this
-                        // Qt keeps the full multi-megapixel image in memory and
-                        // re-samples it through the shear every frame → stutter.
-                        sourceSize: Qt.size(root.imgW, root.imgH)
-                        asynchronous: true
-                        // no cache: video themes regenerate still.png under the
-                        // same path, and the cached old frame would stick forever
-                        cache: false
-                        smooth: true
-                        transform: Matrix4x4 {
-                            // Opposite shear about the image centre → cancels
-                            // the frame shear, so the picture stays upright.
-                            readonly property real s: -root.skewFactor
-                            matrix: Qt.matrix4x4(1, s, 0, -s * root.imgH / 2,
-                                                 0, 1, 0, 0,
-                                                 0, 0, 1, 0,
-                                                 0, 0, 0, 1)
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (card.PathView.isCurrentItem) root.applyTheme()
-                            else view.currentIndex = card.index
-                        }
-                    }
-                }
-            }
+            anchors.bottomMargin: 84
+            visible: root.themes.length > 0
+            text: "←→ works    ↑↓ plates    ↵ hang    esc leave"
+            font.family: Theme.mono
+            font.pixelSize: 10
+            font.letterSpacing: 1
+            color: Theme.textMuted
+            style: Text.Raised
+            styleColor: Theme.light ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(0, 0, 0, 0.6)
+            opacity: 0.8
         }
     }
 }

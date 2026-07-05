@@ -5,11 +5,13 @@ import Quickshell.Wayland
 import Quickshell.Io
 import "../common"
 
-// Plays the active theme's wallpaper.mp4 (awww only paints stills — the
-// switcher gives awww the theme's still.png and this loops the real video on
-// top). Background layer: maps after awww's long-lived surface, so it stacks
-// above the still and below all Bottom-layer scenery. Needs working VAAPI or
-// a 4K60 loop costs ~1.5 cores (LIBVA_DRIVER_NAME in hyprland env).
+// Plays the active video wallpaper (awww only paints stills — the switcher
+// gives awww the video's extracted <name>.still.png and this loops the real
+// video on top). A theme can ship several wallpaper*.mp4 variants; whichever
+// still awww is holding names the video to play. Background layer: maps after
+// awww's long-lived surface, so it stacks above the still and below all
+// Bottom-layer scenery. Needs working VAAPI or a 4K60 loop costs ~1.5 cores
+// (LIBVA_DRIVER_NAME in hyprland env).
 PanelWindow {
     id: root
     required property var modelData
@@ -24,7 +26,7 @@ PanelWindow {
     mask: Region {}
     visible: videoPath !== ""
 
-    property string themeDir: ActiveTheme.dirFor(root.modelData ? root.modelData.name : "")
+    property string activeImg: ActiveTheme.imgFor(root.modelData ? root.modelData.name : "")
     property string videoPath: ""
 
     function fileUrl(p) {
@@ -40,11 +42,12 @@ PanelWindow {
     // command built at call time, not bound — the one-behind trap (see ThemeClock)
     function rescan() {
         existProc.command = ["bash", "-c",
-            'd="$1"; f="$d/wallpaper.mp4"; { [ -n "$d" ] && [ -f "$f" ]; } || exit 0; printf "%s" "$f"',
-            "_", root.themeDir]
+            'img="$1"; case "$img" in *.still.png) v="${img%.still.png}.mp4"; ' +
+            '[ -f "$v" ] && printf "%s" "$v";; esac; true',
+            "_", root.activeImg]
         existProc.running = true
     }
-    onThemeDirChanged: rescan()
+    onActiveImgChanged: rescan()
     Component.onCompleted: rescan()
 
     Connections {

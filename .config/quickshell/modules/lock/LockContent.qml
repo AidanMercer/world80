@@ -28,8 +28,8 @@ Item {
     onResetNonceChanged: pwInput.text = ""
 
     // ---- background: the live wallpaper, blurred + darkened ----------------
-    // Video themes (wallpaper.mp4 next to the still awww holds) keep playing
-    // here, muted and looping. A theme lock.qml carrying the `bareLock` marker
+    // Video wallpapers (awww holds their <name>.still.png) keep playing here,
+    // muted and looping. A theme lock.qml carrying the `bareLock` marker
     // takes over ALL the default chrome: background stays sharp and the
     // blur/tint/clock/dots below stand down — the overlay draws its own,
     // reading host.pwLength/failed/busy and blurring host.backgroundItem.
@@ -46,7 +46,8 @@ Item {
             'else line=$(awww query 2>/dev/null | head -1); fi; ' +
             'img=$(printf "%s" "$line" | sed -n "s/.*image: //p"); ' +
             'printf "%s" "$img"; ' +
-            'v="${img%/*}/wallpaper.mp4"; [ -n "$img" ] && [ -f "$v" ] && printf "\\t%s" "$v"; true',
+            'case "$img" in *.still.png) v="${img%.still.png}.mp4"; ' +
+            '[ -f "$v" ] && printf "\\t%s" "$v";; esac; true',
             "_", root.screenName]
         stdout: StdioCollector {
             onStreamFinished: {

@@ -14,18 +14,31 @@ import Quickshell.Hyprland
 // Parsing mirrors the old per-loader grep+sed exactly: find the awww line that
 // mentions this monitor's name, take everything after the last "image: ", and walk
 // up to its folder. Robust to awww's odd leading ": " on each line.
+//
+// Themes can ship several wallpapers (wallpaper.jpg, wallpaper2.mp4, ...), so the
+// map keeps the full IMAGE path awww reported — imgFor() tells you which variant a
+// monitor is on (video variants show as their <name>.still.png), dirFor() still
+// walks up to the theme folder for the widget loaders.
 QtObject {
     id: at
 
-    property var map: ({})        // monitorName -> theme dir ("" absent)
+    property var map: ({})        // monitorName -> active wallpaper image ("" absent)
     property bool ready: false    // awww has answered at least once
     property int retriesLeft: 10
 
-    function dirFor(name) { return (name && at.map[name]) ? at.map[name] : "" }
+    function imgFor(name) { return (name && at.map[name]) ? at.map[name] : "" }
+    function dirFor(name) {
+        const img = at.imgFor(name)
+        return img ? img.replace(/\/[^/]*$/, "") : ""   // dirname(img)
+    }
 
     readonly property string focusedDir: {
         const m = Hyprland.focusedMonitor
         return m ? at.dirFor(m.name) : ""
+    }
+    readonly property string focusedImg: {
+        const m = Hyprland.focusedMonitor
+        return m ? at.imgFor(m.name) : ""
     }
 
     function reload() { at.ready = false; at.retriesLeft = 10; queryProc.running = true }
@@ -43,7 +56,7 @@ QtObject {
             const k = line.lastIndexOf("image: ")
             if (k === -1) continue
             const img = line.substring(k + 7).trim()
-            if (img) m[name] = img.replace(/\/[^/]*$/, "")   // dirname(img)
+            if (img) m[name] = img
         }
         at.map = m
         at.ready = true
