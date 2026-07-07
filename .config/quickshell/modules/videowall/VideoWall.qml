@@ -2,6 +2,7 @@ import QtQuick
 import QtMultimedia
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Io
 import "../common"
 
@@ -55,8 +56,17 @@ PanelWindow {
         function onThemeReloadRequested() { root.rescan() }
     }
 
+    // a fullscreen window hides the wallpaper completely — don't decode behind it.
+    // workspace.active so a fullscreen window parked on another workspace doesn't
+    // freeze the visible loop; every miss falls through to false = keep playing.
+    readonly property var hyprMon: Hyprland.monitorFor(root.modelData)
+    readonly property bool covered: Hyprland.toplevels.values.some(t =>
+        t.wayland && t.wayland.fullscreen
+        && t.monitor === root.hyprMon
+        && t.workspace && t.workspace.active)
+
     // the lock surfaces cover everything (and play their own copy) — pause behind them
-    readonly property bool shouldPlay: root.videoPath !== "" && !ControlBus.sessionLocked
+    readonly property bool shouldPlay: root.videoPath !== "" && !ControlBus.sessionLocked && !root.covered
     onShouldPlayChanged: shouldPlay ? player.play() : player.pause()
 
     MediaPlayer {

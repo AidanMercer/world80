@@ -31,6 +31,8 @@ Item {
         display = z
     }
 
+    property double lastFrameMs: 0
+
     Process {
         id: cava
         running: true
@@ -54,7 +56,11 @@ Item {
             if (parts[i] === "") continue
             out.push(Math.min(1, parseInt(parts[i]) / 1000))
         }
-        if (out.length) root.levels = out
+        if (out.length) {
+            root.levels = out
+            root.lastFrameMs = Date.now()
+            smooth.start()
+        }
     }
 
     // 30fps is plenty for a visualizer and halves paint cost. We ease toward the
@@ -63,6 +69,7 @@ Item {
     // The deadzone floors cava's amplified noise floor to zero so "silence" really
     // is silent (autosens cranks gain with no signal and would jitter forever).
     Timer {
+        id: smooth
         interval: 33
         running: true
         repeat: true
@@ -81,6 +88,10 @@ Item {
                 root.display = d
                 canvas.requestPaint()
             }
+            // cava sleeps at silence (sleep_timer) — once frames stop and the
+            // outline has settled there's nothing to ease; parseFrame rearms
+            else if (Date.now() - root.lastFrameMs > 2000)
+                smooth.stop()
         }
     }
 

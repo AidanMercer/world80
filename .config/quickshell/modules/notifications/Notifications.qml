@@ -143,7 +143,12 @@ Scope {
 
         onNotification: (n) => {
             n.tracked = true
-            scope.popups = [n, ...scope.popups].slice(0, scope.maxVisible)
+            const next = [n, ...scope.popups]
+            scope.popups = next.slice(0, scope.maxVisible)
+            // whatever fell off the end is still tracked in the server — dismiss
+            // it or it (and its image payload) is retained forever
+            for (const x of next.slice(scope.maxVisible))
+                if (x.dismiss) x.dismiss()
         }
     }
 

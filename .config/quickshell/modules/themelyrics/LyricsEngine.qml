@@ -350,10 +350,12 @@ QtObject {
 
     property Process _audioCava: Process {
         id: audioCava
-        running: engine.active && engine.isPrimary
+        // playing too — a paused player doesn't need a 60fps capture stream;
+        // frame-stop decays audioReady below, which is the designed fail-open
+        running: engine.active && engine.isPrimary && engine.playing
         command: ["cava", "-p", Qt.resolvedUrl("cava-lyrics.conf").toString().replace("file://", "")]
         stdout: SplitParser { onRead: line => engine.parseAudioFrame(line) }
-        onRunningChanged: if (engine.active && engine.isPrimary && !running) audioCavaRestart.start()
+        onRunningChanged: if (engine.active && engine.isPrimary && engine.playing && !running) audioCavaRestart.start()
     }
     property Timer _audioCavaRestart: Timer {
         id: audioCavaRestart
@@ -361,7 +363,7 @@ QtObject {
         // re-assign the BINDING, never `running = true`: an imperative write
         // would strip the active/isPrimary gate off this long-lived object, so
         // one cava crash could leak a 60fps reader past deactivation forever
-        onTriggered: audioCava.running = Qt.binding(() => engine.active && engine.isPrimary)
+        onTriggered: audioCava.running = Qt.binding(() => engine.active && engine.isPrimary && engine.playing)
     }
     // If frames stop (cava died, not yet restarted), decay to not-ready so the
     // feature fails open rather than holding a stale 'silent'.

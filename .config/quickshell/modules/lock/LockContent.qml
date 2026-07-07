@@ -70,7 +70,8 @@ Item {
                     ? "file://" + root.wallpaper : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            cache: true
+            // uncached: a 4K still decodes to ~33MB and would outlive the lock
+            cache: false
         }
         MediaPlayer {
             id: bgPlayer
