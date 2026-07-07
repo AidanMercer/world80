@@ -25,6 +25,113 @@ Scope {
         if (n) n.dismiss()
     }
 
+    // ── captive-portal watcher ──────────────────────────────────────────
+    // NetworkManager already probes its check URI on every new connection
+    // (/usr/lib/NetworkManager/conf.d/20-connectivity.conf); hotel/cafe wifi
+    // hijacks that probe and NM flags connectivity 'portal'. Nothing else on
+    // this system listens for that, so we do: raise a sticky card whose button
+    // opens the login page in the browser (the portal hijacks that request too,
+    // which is exactly what lands you on the sign-in form), then force rechecks
+    // so the card clears moments after login instead of at NM's next 5-minute
+    // probe. Synthetic note, not a real dbus Notification — same card shape.
+    property string portalCheckUri: "http://ping.archlinux.org/nm-check.txt"
+    // any portal card currently visible? (marker-scan, not identity tracking —
+    // a single tracked reference goes stale across reloads and orphans cards)
+    readonly property bool portalShowing: popups.some(x => x.portal === true)
+
+    function onConnectivity(state) {
+        if (state === "portal") {
+            if (scope.portalShowing) return
+            const note = {
+                portal: true,
+                appName: "Network",
+                appIcon: "network-wireless",
+                summary: "Wi-Fi needs a web sign-in",
+                body: "This network blocks internet access until you log in on its portal page.",
+                urgency: NotificationUrgency.Normal,
+                sticky: true,
+                actions: [{
+                    text: "Open login page",
+                    invoke: () => scope.openPortalPage()
+                }],
+                dismiss: () => {}
+            }
+            scope.popups = [note, ...scope.popups].slice(0, scope.maxVisible)
+        } else if (state === "full" || state === "none") {
+            // signed in (or left the network) — retire every portal card
+            if (scope.portalShowing)
+                scope.popups = scope.popups.filter(x => x.portal !== true)
+        }
+    }
+
+    // stream connectivity transitions from NM
+    Process {
+        id: nmMonitor
+        command: ["env", "LC_ALL=C", "nmcli", "monitor"]
+        running: true
+        stdout: SplitParser {
+            onRead: (line) => {
+                const m = /^Connectivity is now '([a-z]+)'/.exec(line)
+                if (m) scope.onConnectivity(m[1])
+            }
+        }
+        onExited: nmMonitorRestart.start() // NM restarted; reattach
+    }
+    Timer { id: nmMonitorRestart; interval: 3000; onTriggered: nmMonitor.running = true }
+
+    // startup: current state, plus whatever check URI NM is configured with
+    Process {
+        running: true
+        command: ["bash", "-c",
+            "nmcli -t -f CONNECTIVITY general status; " +
+            "busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager " +
+            "org.freedesktop.NetworkManager ConnectivityCheckUri 2>/dev/null | cut -d '\"' -f2"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = text.trim().split("\n")
+                if (lines[1]) scope.portalCheckUri = lines[1]
+                scope.onConnectivity(lines[0])
+            }
+        }
+    }
+
+    // The browser must never be pointed at the check URI itself: archlinux.org
+    // is HSTS-preloaded, so the browser force-upgrades it to https, hits the
+    // portal's own cert, and refuses with no override (SSL_ERROR_BAD_CERT_DOMAIN,
+    // seen live on a datavalet portal). curl has no HSTS store — probe the check
+    // URI over plain http, open the portal's actual redirect target; portals
+    // that hijack with a 200 page instead of a 3xx get neverssl.com, which any
+    // portal can intercept and no browser will upgrade.
+    function openPortalPage() {
+        // command built at call time, not bound — the one-behind trap again
+        portalOpen.command = ["bash", "-c",
+            'url=$(curl -sm 4 -o /dev/null -w "%{redirect_url}" "$1"); ' +
+            'exec xdg-open "${url:-http://neverssl.com}"',
+            "_", scope.portalCheckUri]
+        portalOpen.running = true
+    }
+    Process { id: portalOpen }
+
+    // while the card is up, poke NM so it notices the completed login fast
+    Timer {
+        running: scope.portalShowing
+        interval: 10000
+        repeat: true
+        onTriggered: nmRecheck.running = true
+    }
+    Process {
+        id: nmRecheck
+        command: ["nmcli", "networking", "connectivity", "check"]
+        stdout: StdioCollector { onStreamFinished: scope.onConnectivity(text.trim()) }
+    }
+
+    // preview/debug: `qs ipc call captivePortal simulate` / `clear`
+    IpcHandler {
+        target: "captivePortal"
+        function simulate(): void { scope.onConnectivity("portal") }
+        function clear(): void { scope.onConnectivity("full") }
+    }
+
     NotificationServer {
         id: server
         keepOnReload: false
@@ -129,6 +236,9 @@ Scope {
                     required property var modelData
                     readonly property var chrome: win.chrome
                     readonly property int urgency: modelData.urgency
+                    // synthetic notes (captive portal) can pin themselves open
+                    readonly property bool sticky: urgency === NotificationUrgency.Critical
+                                                || modelData.sticky === true
                     readonly property bool hovered: cardHover.containsMouse
                     readonly property color accentCol:
                         urgency === NotificationUrgency.Critical ? Theme.danger
@@ -174,10 +284,10 @@ Scope {
                         color: card.accentCol
                     }
 
-                    // auto-dismiss unless critical or hovered
+                    // auto-dismiss unless sticky (critical / portal) or hovered
                     Timer {
                         interval: card.urgency === NotificationUrgency.Low ? 1800 : 2200
-                        running: card.urgency !== NotificationUrgency.Critical && !cardHover.containsMouse
+                        running: !card.sticky && !cardHover.containsMouse
                         repeat: false
                         onTriggered: scope.remove(card.modelData)
                     }
