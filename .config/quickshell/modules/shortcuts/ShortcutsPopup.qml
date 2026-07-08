@@ -77,10 +77,12 @@ PanelWindow {
                 { keys: ["Super", "C"],          desc: "Code" },
                 { keys: ["Super", "G"],          desc: "GitHub Desktop" },
                 { keys: ["Super", "Shift", "C"], desc: "Claude" },
+                { keys: ["Super", "S"],          desc: "Frostify" },
                 { keys: ["Super", "R"],          desc: "App launcher" }
             ]},
             { title: "System", binds: [
                 { keys: ["Super", "M"],          desc: "Control center" },
+                { keys: ["Super", "V"],          desc: "Clipboard history" },
                 { keys: ["Super", "Shift", "T"], desc: "Themes" },
                 { keys: ["Super", "Shift", "R"], desc: "Restart shell" },
                 { keys: ["Super", "L"],          desc: "Lock screen" },
