@@ -201,8 +201,8 @@ else skip "services left alone"; fi
 # ── frostify (optional, separate app that fills the frostify.qml slot) ────
 if [ "$DO_FROSTIFY" = 1 ] && [ ! -d "$HOME/frostify" ]; then
   say "Frostify (optional)"
-  echo "  A full-screen now-playing overlay — album art, lyrics, controls — that"
-  echo "  follows Spotify and any MPRIS player and matches your active theme (Super+S)."
+  echo "  A full-screen now-playing overlay — album art, playlists, and playback"
+  echo "  controls — that follows Spotify/MPRIS and matches your active theme (Super+S)."
   if ask "install Frostify to ~/frostify?"; then
     git clone --depth 1 "$FROSTIFY_REPO" "$HOME/frostify" && ok "cloned ~/frostify" \
       || warn "clone failed — set FROSTIFY_REPO at the top of this script if the URL is wrong"

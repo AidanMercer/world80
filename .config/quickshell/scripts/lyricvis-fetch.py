@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +29,9 @@ import xml.etree.ElementTree as ET
 
 CACHE_DIR = os.path.expanduser("~/.cache/lyricvis")
 UA = "lyricvis/0.1 (https://github.com/AidanMercer/hypr-dots)"
+# a "no lyrics found" hit is only trusted this long — LRCLIB/AMLL fill lyrics in
+# after the fact, so an empty result gets re-checked instead of sticking forever.
+NEG_TTL_S = 14 * 86400
 LRCLIB = "https://lrclib.net"
 # AMLL community word-level TTML DB, keyed by spotify track id. Coverage is thin
 # (CJK-skewed, ~thousands of entries) so this is an OPPORTUNISTIC source above
@@ -386,11 +390,18 @@ def main():
 
     # cache hit — re-stamp reqId for the live track. A torn/unreadable file just
     # falls through to a fresh fetch (self-healing alongside the atomic write).
+    # Found lyrics + confirmed-instrumental are kept forever; a plain "not found"
+    # is re-checked after NEG_TTL_S, since a track often gets lyrics added later.
     if not a.force and os.path.exists(path):
         try:
             with open(path, encoding="utf-8") as f:
-                emit(json.load(f), a.id)
-            return
+                cached = json.load(f)
+            missing = not cached.get("lines") and not cached.get("plain")
+            stale = (missing and not cached.get("instrumental")
+                     and time.time() - os.path.getmtime(path) > NEG_TTL_S)
+            if not stale:
+                emit(cached, a.id)
+                return
         except (OSError, ValueError):
             pass
 
