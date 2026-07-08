@@ -5,7 +5,7 @@
 #      extracting a frame from an mp4 theme if its still isn't cached yet.
 # the theme switcher writes the "last applied" path to the cache file below.
 set -u
-last="${XDG_CACHE_HOME:-$HOME/.cache}/hypr-dots/last-wallpaper"
+last="${XDG_CACHE_HOME:-$HOME/.cache}/world80/last-wallpaper"
 pick=""
 
 if [ -f "$last" ]; then

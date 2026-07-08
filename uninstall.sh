@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hypr-dots uninstaller — reverses install.sh. Removes the config symlinks it
+# world80 uninstaller — reverses install.sh. Removes the config symlinks it
 # created and, on request, the extras (themes, Frostify, caches, packages).
 #
 # Safe by default: it only unlinks symlinks that point into THIS repo, never
@@ -33,7 +33,7 @@ askp() { [ "$PURGE" = 1 ] && return 0; ask "$1"; }
 
 cat <<EOF
 
-${c_hi}hypr-dots uninstaller${c_off}
+${c_hi}world80 uninstaller${c_off}
   Unlinks the configs and (on request) removes themes, Frostify, and caches.
   ${c_dim}Only touches symlinks pointing into this repo. Leaves the repo clone in place.${c_off}
 EOF
@@ -56,7 +56,7 @@ for name in "${entries[@]}"; do
 done
 
 # ── restore the newest backup install.sh made, if any ─────────────────────
-newest_backup="$(ls -1d "$HOME"/.config/hypr-dots-backup-* 2>/dev/null | sort | tail -1 || true)"
+newest_backup="$(ls -1d "$HOME"/.config/world80-backup-* 2>/dev/null | sort | tail -1 || true)"
 if [ -n "$newest_backup" ]; then
   say "Backups"
   if askp "restore your pre-install configs from $newest_backup?"; then
@@ -82,7 +82,7 @@ else skip "no ~/.config/themes"; fi
 
 # ── per-machine hypr conf + caches ────────────────────────────────────────
 say "Caches + per-machine files"
-for d in "$HOME/.cache/hypr-dots" "$HOME/.cache/hypr-marketplace"; do
+for d in "$HOME/.cache/world80" "$HOME/.cache/hypr-marketplace"; do
   [ -e "$d" ] && { rm -rf "$d"; ok "removed $d"; }
 done
 skip "left ~/.config/hypr/{monitors,local}.conf in the repo (delete by hand if you want)"
@@ -115,7 +115,7 @@ fi
 say "Done"
 cat <<EOF
 
-  hypr-dots is unlinked. The repo clone is still at $REPO_DIR — delete it with
+  world80 is unlinked. The repo clone is still at $REPO_DIR — delete it with
   \`rm -rf "$REPO_DIR"\` if you're done with it.
 $( [ -n "$newest_backup" ] && [ -d "$newest_backup" ] && printf "  Your original configs are still backed up in %s\n" "$newest_backup" )
 EOF

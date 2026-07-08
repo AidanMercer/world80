@@ -262,7 +262,7 @@ PanelWindow {
             // remember this wallpaper so restore-wallpaper.sh brings it back at login
             if (root.lastAwwwTarget !== "")
                 Quickshell.execDetached(["sh", "-c",
-                    'd="${XDG_CACHE_HOME:-$HOME/.cache}/hypr-dots"; mkdir -p "$d"; printf "%s\\n" "$1" > "$d/last-wallpaper"',
+                    'd="${XDG_CACHE_HOME:-$HOME/.cache}/world80"; mkdir -p "$d"; printf "%s\\n" "$1" > "$d/last-wallpaper"',
                     "_", root.lastAwwwTarget])
             colorProc.command = ["bash", "-c",
                 '"$HOME/dotfiles/.config/hypr/theme-colors.sh" "$1"', "_", root.pendingThemeDir]

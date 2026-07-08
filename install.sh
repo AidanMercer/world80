@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# hypr-dots installer — lays the config symlinks, installs packages, wires the
+# world80 installer — lays the config symlinks, installs packages, wires the
 # per-machine bits, and seeds a starter theme so first boot isn't blank.
 #
 # safe to re-run: it backs up anything it would overwrite and skips work that's
 # already done. nothing here is destructive without asking.
 #
-#   git clone https://github.com/AidanMercer/hypr-dots ~/dotfiles
+#   git clone https://github.com/AidanMercer/world80 ~/dotfiles
 #   ~/dotfiles/install.sh
 #
 # flags:  --no-packages   skip pacman/paru
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKUP_DIR="$HOME/.config/hypr-dots-backup-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="$HOME/.config/world80-backup-$(date +%Y%m%d-%H%M%S)"
 THEMES_REPO="AidanMercer/themes"        # marketplace source (pinned)
 FROSTIFY_REPO="https://github.com/AidanMercer/frostify"
 STARTER_THEME="moon"                    # seeded so the desktop looks alive day one
@@ -47,7 +47,7 @@ choose() { # choose "prompt" "opt1" "opt2"... -> sets REPLY to the 1-based pick
 
 cat <<EOF
 
-${c_hi}hypr-dots installer${c_off}
+${c_hi}world80 installer${c_off}
   Sets up: packages · config symlinks · per-machine files · themes · Frostify.
   ${c_dim}Backs up anything it replaces and asks before each big step. Ctrl-C anytime.${c_off}
 EOF

@@ -18,7 +18,7 @@ shift 4
 files=("$@")
 base="https://raw.githubusercontent.com/$repo/$branch"
 dest_root="${THEME_DEST:-$HOME/.config/themes}"
-UA="hypr-marketplace (https://github.com/AidanMercer/hypr-dots)"
+UA="hypr-marketplace (https://github.com/AidanMercer/world80)"
 
 # never let a crafted catalog name escape the themes dir
 case "$name" in */*|.*|"") echo "ERR bad theme name"; exit 1 ;; esac

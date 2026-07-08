@@ -1,4 +1,4 @@
-# hypr-dots
+# world80
 
 A custom **Hyprland + Quickshell** desktop for Arch Linux. Wallpaper-driven theming, a
 built-in theme **marketplace**, live desktop lyrics, per-theme lock screens, and a
@@ -45,7 +45,7 @@ decode on any of the three. It never touches drivers, the kernel, or the bootloa
 ## Install
 
 ```sh
-git clone https://github.com/AidanMercer/hypr-dots ~/dotfiles
+git clone https://github.com/AidanMercer/world80 ~/dotfiles
 ~/dotfiles/install.sh
 ```
 

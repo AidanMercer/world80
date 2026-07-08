@@ -28,7 +28,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 CACHE_DIR = os.path.expanduser("~/.cache/lyricvis")
-UA = "lyricvis/0.1 (https://github.com/AidanMercer/hypr-dots)"
+UA = "lyricvis/0.1 (https://github.com/AidanMercer/world80)"
 # a "no lyrics found" hit is only trusted this long — LRCLIB/AMLL fill lyrics in
 # after the fact, so an empty result gets re-checked instead of sticking forever.
 NEG_TTL_S = 14 * 86400
