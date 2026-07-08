@@ -10,7 +10,6 @@
 - [ ] custom file explorer
 - [x] live lyrics (LyricsEngine in the shell + lyrics.qml per theme)
 - [x] better Super+M menu (popup.qml chrome slot)
-- [ ] custom video-to-ASCII art on the background (video wallpapers shipped instead — still want the ascii version?)
 
 ## Theme settings & layout
 - [x] per-theme settings in the Super+Shift+/ sheet (clock/visualizer/sysinfo/lyrics toggles, ThemeSettings singleton, loaders unmount live)
