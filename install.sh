@@ -139,10 +139,44 @@ if [ ! -e "$mon" ]; then
   printf '# per-machine monitor layout. see `hyprctl monitors`.\nmonitor = , preferred, auto, 1\n' > "$mon"
   ok "wrote a default monitors.conf (edit for your displays)"
 else skip "monitors.conf exists"; fi
+# hyprland.conf hardcodes LIBVA_DRIVER_NAME=nvidia (author's desktop). local.conf
+# is sourced AFTER it and wins, so we detect the GPU and set the right VAAPI
+# driver here — otherwise AMD/Intel video wallpapers fall back to CPU decode.
+# This only writes a userspace env var; it does NOT install or touch drivers.
+gpu_vendor() {
+  local g; g="$(lspci 2>/dev/null | grep -iE 'vga|3d|display' || true)"
+  echo "$g" | grep -qi nvidia && { echo nvidia; return; }
+  echo "$g" | grep -qiE 'amd|ati|radeon' && { echo amd; return; }
+  echo "$g" | grep -qi intel && { echo intel; return; }
+  echo unknown
+}
 if [ ! -e "$loc" ]; then
-  printf '# per-machine env/overrides, sourced by hyprland.conf.\n# e.g. an AMD laptop needs: env = LIBVA_DRIVER_NAME,radeonsi\n' > "$loc"
-  ok "wrote an empty local.conf (per-machine env goes here)"
-else skip "local.conf exists"; fi
+  v="$(gpu_vendor)"
+  case "$v" in
+    amd)     libva="radeonsi" ;;
+    intel)   libva="iHD" ;;
+    nvidia)  libva="nvidia" ;;
+    *)       libva="" ;;
+  esac
+  {
+    printf '# per-machine env/overrides, sourced by hyprland.conf (last wins).\n'
+    if [ -n "$libva" ]; then
+      printf '# detected a %s GPU — VAAPI driver for hardware video decode:\n' "$v"
+      printf 'env = LIBVA_DRIVER_NAME,%s\n' "$libva"
+    else
+      printf '# couldn'"'"'t detect the GPU — set your VAAPI driver by hand:\n'
+      printf '#   AMD:  env = LIBVA_DRIVER_NAME,radeonsi\n'
+      printf '#   Intel:env = LIBVA_DRIVER_NAME,iHD\n'
+      printf '#   (nvidia is already set in hyprland.conf)\n'
+    fi
+  } > "$loc"
+  ok "wrote local.conf (GPU: $v${libva:+, LIBVA_DRIVER_NAME=$libva})"
+  case "$v" in
+    nvidia) warn "nvidia: make sure nvidia-open-dkms + nvidia-utils are installed (base system)" ;;
+    amd)    warn "amd: make sure mesa + vulkan-radeon + libva-mesa-driver are installed (base system)" ;;
+    intel)  warn "intel: make sure mesa + vulkan-intel + intel-media-driver are installed (base system)" ;;
+  esac
+else skip "local.conf exists (left your GPU env alone)"; fi
 
 # ── themes: a plain dir the marketplace fills, plus an optional first batch ─
 say "Themes"

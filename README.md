@@ -36,6 +36,12 @@ control center — all hand-written, no matugen, no auto-theming.
 Arch Linux with Hyprland. Everything else (quickshell, awww, pipewire, fonts, …) is in
 [`packages.txt`](packages.txt) and the installer handles it.
 
+**GPU:** install your graphics driver as part of the base Arch setup — `nvidia-open-dkms`
+(NVIDIA), `mesa` + `vulkan-radeon` (AMD), or `mesa` + `vulkan-intel` (Intel). The rice
+itself is vendor-agnostic: the installer detects your GPU and writes the right
+`LIBVA_DRIVER_NAME` into `~/.config/hypr/local.conf` so the video wallpapers get hardware
+decode on any of the three. It never touches drivers, the kernel, or the bootloader.
+
 ## Install
 
 ```sh
