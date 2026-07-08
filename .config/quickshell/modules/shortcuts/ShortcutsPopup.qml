@@ -88,7 +88,8 @@ PanelWindow {
                 { keys: ["Super", "L"],          desc: "Lock screen" },
                 { keys: ["Super", "Shift", "S"], desc: "Screenshot region" },
                 { keys: ["Super", "/"],          desc: "This sheet" },
-                { keys: ["Super", "Shift", "/"], desc: "Settings" }
+                { keys: ["Super", "Shift", "/"], desc: "Settings" },
+                { keys: ["Super", "."],          desc: "Pin system info" }
             ]},
             { title: "Workspaces", binds: [
                 { keys: ["Super", "1 – 5"],            desc: "Switch workspace" },

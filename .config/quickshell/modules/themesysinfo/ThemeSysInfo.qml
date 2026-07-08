@@ -11,14 +11,16 @@ import "../common"
 // monitor is showing, walks up to that theme folder, and loads its sysinfo.qml if
 // present. No sysinfo.qml → nothing renders. Swap the wallpaper and it swaps too.
 //
-// Bottom layer (above wallpaper, below windows), fully click-through scenery.
+// Overlay layer (above every window, not just the wallpaper) so the readout
+// stays visible over whatever you're working in — still fully click-through
+// scenery (empty input mask), so it never steals a click from the window under it.
 PanelWindow {
     id: root
     required property var modelData
     screen: modelData
 
     WlrLayershell.namespace: "quickshell-themesysinfo"
-    WlrLayershell.layer: WlrLayer.Bottom
+    WlrLayershell.layer: WlrLayer.Overlay
 
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore

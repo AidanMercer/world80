@@ -146,6 +146,33 @@ ShellRoot {
         function get():     string { return String(shellRoot.lyricOffsetMs) }
     }
 
+    // Sys-info pin. Hover-reveal themes open their readout only while the bar's
+    // trigger is hovered; Super+. (hyprland.conf) flips this pin so the panel
+    // stays up hands-free. Same mirror-file idiom as the hover flag: THIS one
+    // handler writes $XDG_RUNTIME_DIR/theme-sysinfo-pin, every sysinfo.qml
+    // watches it and ORs it with the hover flag. Always-on themes (moon,
+    // vinland) simply ignore it.
+    property bool sysinfoPinned: false
+    FileView {
+        id: sysinfoPinFile
+        path: {
+            const rt = Quickshell.env("XDG_RUNTIME_DIR")
+            return ((rt && String(rt).length) ? String(rt) : "/tmp") + "/theme-sysinfo-pin"
+        }
+        blockLoading: true
+        preload: true
+        printErrors: false
+        onLoaded: shellRoot.sysinfoPinned = text().trim() === "1"
+    }
+    IpcHandler {
+        target: "sysinfo"
+        function toggle(): void {
+            shellRoot.sysinfoPinned = !shellRoot.sysinfoPinned
+            sysinfoPinFile.setText(shellRoot.sysinfoPinned ? "1\n" : "0\n")
+        }
+        function get(): string { return shellRoot.sysinfoPinned ? "1" : "0" }
+    }
+
     // Re-read the active theme's config.toml whenever the wallpaper changes.
     Connections {
         target: ControlBus
