@@ -45,8 +45,16 @@ qt6ct
 
 # files, fonts, terminal extras
 dolphin
-ttf-nerd-fonts-symbols
 fastfetch
+# fonts the shell + themes actually render with:
+#   nerd-fonts-symbols — the icon glyphs everywhere (Symbols Nerd Font)
+#   noto-fonts         — Noto Sans / Serif / Mono (bar, lyrics, clocks)
+#   noto-fonts-extra   — Noto Serif Display + Noto Sans Runic (theme accents)
+#   noto-fonts-emoji   — colour emoji used in a few UI labels
+ttf-nerd-fonts-symbols
+noto-fonts
+noto-fonts-extra
+noto-fonts-emoji
 
 # media + net helpers
 #   ffmpeg — video-wallpaper still extraction + marketplace catalog thumbs

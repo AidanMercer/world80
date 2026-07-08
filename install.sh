@@ -182,6 +182,19 @@ else skip "local.conf exists (left your GPU env alone)"; fi
 say "Themes"
 mkdir -p "$HOME/.config/themes"; ok "~/.config/themes ready"
 
+# the shell layers every theme over themes/default/config.toml, so that base
+# always has to exist. it isn't a marketplace theme (no wallpaper) — just the
+# palette floor — so seed its couple of files directly.
+if [ ! -f "$HOME/.config/themes/default/config.toml" ]; then
+  mkdir -p "$HOME/.config/themes/default"; base_ok=1
+  for f in config.toml frostify.qml; do
+    curl -fsSL "https://raw.githubusercontent.com/$THEMES_REPO/master/default/$f" \
+      -o "$HOME/.config/themes/default/$f" 2>/dev/null || base_ok=0
+  done
+  [ "$base_ok" = 1 ] && ok "installed the base 'default' theme (palette floor)" \
+    || warn "couldn't fetch the default base — check your connection and re-run"
+else skip "default base theme present"; fi
+
 THEME_IDX="" THEME_COMMIT=""
 theme_catalog() { # fetch index.json once; needs jq + curl
   [ -n "$THEME_IDX" ] && return 0
