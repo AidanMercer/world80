@@ -5,6 +5,7 @@ import "modules/common"
 import "modules/bar"
 import "modules/archlogo"
 import "modules/launcher"
+import "modules/clipboard"
 import "modules/themeclock"
 import "modules/videowall"
 import "modules/themesysinfo"
@@ -92,6 +93,11 @@ ShellRoot {
 
     // Single app launcher window; toggled over IPC from the Super keybind.
     Launcher {}
+
+    // Clipboard history picker (cliphist-backed); toggled via `qs ipc call
+    // clipboard toggle` (Super+V in hyprland.conf). Also owns the wl-paste
+    // watchers that collect the history while the shell runs.
+    ClipboardPopup {}
 
     // Theme switcher overlay; toggled via `qs ipc call themeSwitcher toggle`
     // (Super+Shift+T in hyprland.conf).
