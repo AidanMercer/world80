@@ -29,6 +29,7 @@
 - [x] more custom wallpapers + push to github (10 themes, multi-wallpaper variants in the switcher)
 - [x] gallery theme switcher (Super+/, vertical wallpaper-variant rail)
 - [x] theme marketplace — browse + download themes from github (Super+/ 3rd tab)
+- [ ] custom theme-switch transition (fade/wipe/morph between old→new wallpaper + chrome, not the bare qs restart flash)
 
 ## Slot parity (older themes missing newer slots)
 - [x] moon: lock.qml + notif.qml (breach-deck bare lock, HUD notif cards)
