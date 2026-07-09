@@ -5,6 +5,7 @@ import "modules/common"
 import "modules/bar"
 import "modules/archlogo"
 import "modules/launcher"
+import "modules/commandpalette"
 import "modules/clipboard"
 import "modules/themeclock"
 import "modules/videowall"
@@ -93,6 +94,10 @@ ShellRoot {
 
     // Single app launcher window; toggled over IPC from the Super keybind.
     Launcher {}
+
+    // Command palette (Super+P); fuzzy list of theme/panel/toggle/window actions,
+    // each firing the same IPC a keybind would.
+    CommandPalette {}
 
     // Clipboard history picker (cliphist-backed); toggled via `qs ipc call
     // clipboard toggle` (Super+V in hyprland.conf). Also owns the wl-paste

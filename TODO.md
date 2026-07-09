@@ -10,9 +10,9 @@
 - [ ] themed sddm greeter (matches current wallpaper theme, boot→desktop cohesion)
 
 ## Apps / widgets
-- [ ] custom file explorer
+- [x] custom file explorer (mica — PySide6+QML miller-columns manager, live world80 theming, Super+E)
 - [x] multi-mode launcher (prefix modes in the Super launcher: `e ` emoji, `w ` window switch/kill, `c ` clipboard, `u `/inline unit convert, `=` calc; live currency still TODO)
-- [ ] command palette (Super+P — fuzzy over theme apply, Shift+/ toggles, hypr actions)
+- [x] command palette (Super+P — fuzzy over theme apply/next/prev, open any panel, toggles (autolock/sysinfo/ui-scale/lyrics), window + session actions; each fires the matching `qs ipc call …` or hypr dispatch)
 - [x] live lyrics (LyricsEngine in the shell + lyrics.qml per theme)
 - [x] better Super+M menu (popup.qml chrome slot)
 - [x] control center (bluetooth/network/display/sound/power tabs)
