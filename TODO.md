@@ -7,6 +7,7 @@
 - [x] better lockscreen / per-theme lockscreens (lock.qml slot, bareLock takeover)
 - [x] video wallpapers (mp4 per variant, VideoWall + lock map still→mp4 by suffix)
 - [x] video themes (avalon + vinland, bare lock, per-theme .qsb shaders)
+- [ ] themed sddm greeter (matches current wallpaper theme, boot→desktop cohesion)
 
 ## Apps / widgets
 - [ ] custom file explorer
@@ -32,6 +33,11 @@
 - [x] shiro: popup.qml (washi card) + sysinfo.qml (margin-notes slip)
 - [x] avalon: sysinfo.qml (hanging vitals ledger)
 - [x] lonely-train: sysinfo.qml (arrivals board)
+
+## Motion / eye-candy (all togglable via Super+Shift+/)
+- [ ] workspace overview / zoom-out exposé (live window thumbnails, themed grid)
+- [ ] cursor parallax (subtle wallpaper depth-shift between workspaces)
+- [ ] theme-native ambient particles (avalon petals / vinland snow drifting on desktop, occlusion-gated)
 
 ## System / desktop polish
 - [x] captive portal watcher (nmcli monitor → sticky card → open login page)
