@@ -118,6 +118,7 @@ PanelWindow {
                 { keys: ["Super", "T"],          desc: "Terminal" },
                 { keys: ["Super", "W"],          desc: "Browser" },
                 { keys: ["Super", "E"],          desc: "Files" },
+                { keys: ["Super", "N"],          desc: "Editor" },
                 { keys: ["Super", "C"],          desc: "Code" },
                 { keys: ["Super", "G"],          desc: "GitHub Desktop" },
                 { keys: ["Super", "Shift", "C"], desc: "Claude" },
