@@ -101,11 +101,21 @@ PanelWindow {
         id: lyricsLoader
         anchors.fill: parent
         onLoaded: if (item && item.hasOwnProperty("isPrimary")) item.isPrimary = root.isPrimary
-        // theme swap: bow out before awww's wallpaper wipe, fade back in
-        // once the new theme's widget has mounted
+        // theme swap: bow out before awww's wallpaper wipe, emerge while the
+        // wipe finishes its sweep
         opacity: ControlBus.swapping ? 0 : 1
         Behavior on opacity {
-            NumberAnimation { duration: ControlBus.swapping ? 140 : 300; easing.type: Easing.OutCubic }
+            id: fadeBeh
+            NumberAnimation { duration: ControlBus.swapping ? 140 : 450; easing.type: Easing.OutCubic }
+        }
+        // a widget that lands after the swap settled still fades in: snap to 0
+        // with the Behavior muted, then hand the property back to its binding
+        onItemChanged: {
+            if (!item || ControlBus.swapping) return
+            fadeBeh.enabled = false
+            opacity = 0
+            fadeBeh.enabled = true
+            opacity = Qt.binding(() => ControlBus.swapping ? 0 : 1)
         }
     }
     // setSource instead of a source binding so the widget gets `pal`/`engine` as

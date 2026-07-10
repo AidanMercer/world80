@@ -249,16 +249,19 @@ PanelWindow {
         root.lastAwwwTarget = wallpaper.endsWith(".mp4")
             ? wallpaper.replace(/\.mp4$/, ".still.png") : wallpaper
         root.pendingWall = wallpaper
+        ControlBus.swapTarget = root.lastAwwwTarget
         ControlBus.swapping = true
         chromeHold.restart()
     }
-    // kick awww near-instantly: its spawn latency (~200ms to first wipe frame)
-    // overlaps the 140ms chrome fade-out, so the wallpaper starts moving right
-    // as the chrome finishes bowing out — no dead air between the two
-    Timer { id: chromeHold; interval: 30; onTriggered: root.kickApply() }
-    // bring the chrome back once the wipe has landed and the loaders have
-    // remounted — a compile stall delays this timer right along with the work
-    Timer { id: settleHold; interval: 850; onTriggered: ControlBus.swapping = false }
+    // kick awww immediately: its spawn latency (~150-200ms to first wipe
+    // frame) fully overlaps the 140ms chrome fade-out, so the wallpaper is
+    // already moving as the chrome finishes bowing out — zero dead air
+    Timer { id: chromeHold; interval: 1; onTriggered: root.kickApply() }
+    // bring the chrome back while the wipe is still finishing its sweep — the
+    // widgets emerge as part of the reveal, not as a second act after it. A
+    // compile stall delays this timer right along with the work; a widget
+    // that mounts even later still fades (loaders fade-from-zero on mount).
+    Timer { id: settleHold; interval: 520; onTriggered: ControlBus.swapping = false }
     function kickApply() {
         const wallpaper = root.pendingWall
         if (wallpaper === "") return

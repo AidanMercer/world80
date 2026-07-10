@@ -41,19 +41,30 @@ PanelWindow {
         }
     }
     // command built at call time, not bound — the one-behind trap (see ThemeClock)
-    function rescan() {
+    function resolve(img) {
         existProc.command = ["bash", "-c",
             'img="$1"; case "$img" in *.still.png) v="${img%.still.png}.mp4"; ' +
             '[ -f "$v" ] && printf "%s" "$v";; esac; true',
-            "_", root.activeImg]
+            "_", img]
         existProc.running = true
     }
+    function rescan() { resolve(root.activeImg) }
     onActiveImgChanged: rescan()
     Component.onCompleted: rescan()
 
     Connections {
         target: ControlBus
         function onThemeReloadRequested() { root.rescan() }
+        // theme swap: once the old video has bowed out, jump straight to the
+        // incoming one so it's buffered and MOVING while still invisible —
+        // the reveal exposes a live wallpaper, not a still that starts late.
+        // ActiveTheme's requery lands later and just re-confirms this path.
+        function onSwappingChanged() { if (ControlBus.swapping) swapJump.restart() }
+    }
+    Timer {
+        id: swapJump
+        interval: 160   // just past the 140ms fade-out
+        onTriggered: if (ControlBus.swapTarget !== "") root.resolve(ControlBus.swapTarget)
     }
 
     // a fullscreen window hides the wallpaper completely — don't decode behind it.
@@ -83,10 +94,11 @@ PanelWindow {
         anchors.fill: parent
         fillMode: VideoOutput.PreserveAspectCrop
         // theme swap: drop to the still underneath so awww's wipe morphs
-        // still→still, then the new video fades in over its own first frame
+        // still→still, then the new video — already playing — emerges over
+        // its own first frame while the wipe finishes
         opacity: ControlBus.swapping ? 0 : 1
         Behavior on opacity {
-            NumberAnimation { duration: ControlBus.swapping ? 140 : 300; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: ControlBus.swapping ? 140 : 450; easing.type: Easing.OutCubic }
         }
     }
 }

@@ -80,11 +80,21 @@ PanelWindow {
         id: themeLoader
         anchors.fill: parent
         onLoaded: if (item) item.barScreen = bar.screen
-        // theme swap: bow out before awww's wallpaper wipe, fade back in
-        // once the new theme's bar has mounted
+        // theme swap: bow out before awww's wallpaper wipe, emerge while the
+        // wipe finishes its sweep
         opacity: ControlBus.swapping ? 0 : 1
         Behavior on opacity {
-            NumberAnimation { duration: ControlBus.swapping ? 140 : 300; easing.type: Easing.OutCubic }
+            id: themeFadeBeh
+            NumberAnimation { duration: ControlBus.swapping ? 140 : 450; easing.type: Easing.OutCubic }
+        }
+        // a bar that lands after the swap settled still fades in: snap to 0
+        // with the Behavior muted, then hand the property back to its binding
+        onItemChanged: {
+            if (!item || ControlBus.swapping) return
+            themeFadeBeh.enabled = false
+            opacity = 0
+            themeFadeBeh.enabled = true
+            opacity = Qt.binding(() => ControlBus.swapping ? 0 : 1)
         }
     }
     // Same occluded handshake as ThemeClock/ThemeSysInfo: a theme bar that
@@ -123,7 +133,15 @@ PanelWindow {
         sourceComponent: defaultContent
         opacity: ControlBus.swapping ? 0 : 1
         Behavior on opacity {
-            NumberAnimation { duration: ControlBus.swapping ? 140 : 300; easing.type: Easing.OutCubic }
+            id: defFadeBeh
+            NumberAnimation { duration: ControlBus.swapping ? 140 : 450; easing.type: Easing.OutCubic }
+        }
+        onItemChanged: {
+            if (!item || ControlBus.swapping) return
+            defFadeBeh.enabled = false
+            opacity = 0
+            defFadeBeh.enabled = true
+            opacity = Qt.binding(() => ControlBus.swapping ? 0 : 1)
         }
     }
     Component {

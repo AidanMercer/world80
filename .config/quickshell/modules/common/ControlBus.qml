@@ -40,8 +40,11 @@ QtObject {
     // chrome out on this, awww's wallpaper transition plays on a bare desktop
     // — it renders in the wallpaper daemon's process, so a QML compile stall
     // here can't hitch it — and the freshly mounted chrome fades back in
-    // when this flips off.
+    // when this flips off. swapTarget is the exact image awww is being handed
+    // (a video's still), so VideoWall can jump to the incoming video early
+    // and have it already moving when it emerges.
     property bool swapping: false
+    property string swapTarget: ""
 
     // Toggle the popup on a specific monitor (used by the StatusButton click).
     function toggle(name) {
