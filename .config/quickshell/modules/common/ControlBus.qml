@@ -38,10 +38,13 @@ QtObject {
 
     // Theme-switch transition. ThemeSwitcher freezes every monitor under a
     // frozen frame (ThemeTransition.qml) before touching awww; each cover
-    // starts wiping away on its own the moment its capture lands, while the
-    // swap races it underneath.
+    // wipes the old frame into the incoming wallpaper (transitionTarget, the
+    // exact image awww is about to show) while the swap finishes fully hidden
+    // beneath, then fades itself off. Empty target = wipe to the live desktop
+    // (the dry-run test).
+    property string transitionTarget: ""
     signal transitionFreeze()
-    function freezeScreens() { transitionFreeze() }
+    function freezeScreens(target) { transitionTarget = target || ""; transitionFreeze() }
 
     // Toggle the popup on a specific monitor (used by the StatusButton click).
     function toggle(name) {

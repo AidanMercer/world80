@@ -5,17 +5,19 @@ import Quickshell.Wayland
 import "../common"
 
 // Theme-switch cover, one per monitor. On freeze it grabs a single screencopy
-// frame of the whole output (wallpaper, chrome, windows, even an open theme
-// gallery) and holds it on the overlay layer while the switch happens under
-// it — awww, theme-colors and every widget loader land out of sight. On
-// reveal the frozen frame wipes away along a soft canted front and the new
-// desktop is just *there*, instead of each piece popping on its own beat.
+// frame of the whole output and holds it on the overlay layer; the wipe then
+// peels that frame into the INCOMING wallpaper (ControlBus.transitionTarget,
+// the exact image awww is about to paint) — two static textures, so nothing
+// the swap does mid-flight can flash or pop inside the revealed strip. awww,
+// theme-colors and every widget loader finish fully hidden beneath, and once
+// the wipe lands the cover fades itself off in a beat: chrome and windows
+// bloom back in over an identical wallpaper. Empty target (the dry-run test)
+// wipes to the live desktop instead.
 //
-// Click-through and unmapped while idle; the capture and its textures only
-// exist for the couple of seconds a switch takes. If the reveal never comes
-// (wedged apply), hardStop wipes anyway — a frozen screen must never outlive
-// its swap. Skipped entirely while the session is locked: the locker owns the
-// screen and nothing here would be visible.
+// Click-through and unmapped while idle; capture + image textures only exist
+// for the ~1.5s a switch takes. If screencopy never delivers, hardStop resets
+// to idle — a frozen screen must never outlive its swap. Skipped entirely
+// while the session is locked: the locker owns the screen.
 PanelWindow {
     id: root
     required property var modelData
@@ -33,9 +35,11 @@ PanelWindow {
     // Until then the live desktop simply stays on screen, which is invisible.
     visible: phase !== 0 && stage.item !== null && stage.item.ready
 
-    // 0 idle · 1 frozen (swap running underneath) · 2 wiping away
+    // 0 idle · 1 frozen (textures loading) · 2 wiping · 3 fading off
     property int phase: 0
-    property real progress: 0       // 0 = frozen frame fully opaque, 1 = gone
+    property real progress: 0       // 0 = frozen frame fully opaque, 1 = wiped
+    property real coverOpacity: 1
+    property string targetWall: ""  // what the wipe reveals ("" = live desktop)
 
     Connections {
         target: ControlBus
@@ -44,39 +48,53 @@ PanelWindow {
             // a fresh freeze captures on its own when captureSource flips on
             // (asking earlier logs a not-ready warning) — only a re-freeze
             // landing mid-wipe, where the context is already live, re-arms
-            const rearm = root.phase === 2
-            revealAnim.stop()
+            const rearm = root.phase >= 2
+            revealSeq.stop()
             root.progress = 0
+            root.coverOpacity = 1
+            root.targetWall = ControlBus.transitionTarget
             root.phase = 1
             if (rearm && stage.item) stage.item.recapture()
             hardStop.restart()
         }
     }
 
-    // click → reveal, no settle wait: the wipe starts the instant the frozen
-    // frame is in hand while the swap races it underneath. The eased front
-    // has only opened a corner before awww and the loaders land behind the
-    // still-covered majority — and a heavy theme compile stalls this
-    // animation together with the swap, so the front can't outrun it.
-    readonly property bool covered: phase === 1 && stage.item !== null && stage.item.ready
+    // the wipe starts once BOTH textures are in hand: the frozen frame and
+    // the incoming wallpaper it lands on. Starting on the frame alone would
+    // snap the image into the already-revealed strip when its decode lands.
+    readonly property bool covered: phase === 1
+        && stage.item !== null && stage.item.ready && stage.item.landReady
     onCoveredChanged: {
         if (!covered) return
         phase = 2
-        revealAnim.restart()
+        revealSeq.restart()
     }
 
-    NumberAnimation {
-        id: revealAnim
-        target: root
-        property: "progress"
-        from: 0; to: 1
-        duration: 1100
-        easing.type: Easing.InOutCubic
-        onFinished: root.phase = 0
+    // wipe the old frame into the incoming image, then fade the whole cover
+    // off — the swap finished long before under it (a compile stall pauses
+    // these animations together with the swap, so the fade can't land early)
+    SequentialAnimation {
+        id: revealSeq
+        NumberAnimation {
+            target: root; property: "progress"
+            from: 0; to: 1
+            duration: 1100
+            easing.type: Easing.InOutCubic
+        }
+        ScriptAction { script: root.phase = 3 }
+        NumberAnimation {
+            target: root; property: "coverOpacity"
+            from: 1; to: 0
+            duration: 220
+            easing.type: Easing.InCubic
+        }
+        ScriptAction {
+            script: { root.phase = 0; root.progress = 0; root.coverOpacity = 1 }
+        }
     }
 
-    // screencopy never delivered (no wipe possible — the cover never mapped):
-    // fall back to idle so the machinery re-arms cleanly
+    // screencopy or the image never delivered (no wipe possible — the cover
+    // may not even have mapped): fall back to idle so the machinery re-arms
     Timer {
         id: hardStop
         interval: 6000
@@ -86,7 +104,7 @@ PanelWindow {
     // instantiated once at startup, not on first freeze — building this tree
     // mid-gallery-animation was a visible hitch right before the wipe. Idle
     // cost stays ~0: the window is unmapped, the layer texture is gated on
-    // phase, and a null captureSource holds no capture buffers.
+    // phase and null captureSource / empty image sources hold no buffers.
     Loader {
         id: stage
         anchors.fill: parent
@@ -95,9 +113,16 @@ PanelWindow {
         sourceComponent: Item {
             id: comp
             anchors.fill: parent
+            opacity: root.coverOpacity
 
             readonly property bool ready: frozen.hasContent
+            readonly property bool landReady: root.targetWall === ""
+                || incoming.status === Image.Ready
             function recapture() { frozen.captureFrame() }
+
+            function fileUrl(p) {
+                return "file://" + p.split("/").map(encodeURIComponent).join("/")
+            }
 
             // slab geometry: diag covers the screen at any tilt, the feather is
             // the soft band the wipe front carries. MultiEffect reads the mask
@@ -106,6 +131,21 @@ PanelWindow {
             readonly property real diag: width + height
             readonly property real feather: diag * 0.30
             readonly property real slabW: diag * 2 + feather
+
+            // where the wipe lands: the incoming wallpaper, center-cropped the
+            // same way awww paints it, so the end fade changes nothing but
+            // chrome. Idle/dry-run: empty source, no texture.
+            Image {
+                id: incoming
+                anchors.fill: parent
+                source: root.phase !== 0 && root.targetWall !== ""
+                    ? comp.fileUrl(root.targetWall) : ""
+                fillMode: Image.PreserveAspectCrop
+                sourceSize: Qt.size(comp.width, comp.height)
+                asynchronous: true
+                cache: false   // regenerated stills must not show stale frames
+                visible: status === Image.Ready
+            }
 
             Item {
                 id: held

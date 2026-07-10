@@ -247,7 +247,8 @@ PanelWindow {
         root.lastAwwwTarget = wallpaper.endsWith(".mp4")
             ? wallpaper.replace(/\.mp4$/, ".still.png") : wallpaper
         root.pendingWall = wallpaper
-        ControlBus.freezeScreens()
+        // the covers wipe INTO this exact image — never the raw mid-swap desktop
+        ControlBus.freezeScreens(root.lastAwwwTarget)
         freezeHold.restart()
     }
     // let every monitor's capture land before anything visibly changes
