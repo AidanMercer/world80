@@ -38,14 +38,14 @@ PanelWindow {
         target: ControlBus
         function onTransitionFreeze() {
             if (ControlBus.sessionLocked) return
-            // a freshly-created view captures on its own (and warns if asked
-            // before its context is up) — only re-arm one that already exists,
-            // i.e. a re-freeze landing mid-wipe
-            const wasUp = stage.item !== null
+            // a fresh freeze captures on its own when captureSource flips on
+            // (asking earlier logs a not-ready warning) — only a re-freeze
+            // landing mid-wipe, where the context is already live, re-arms
+            const rearm = root.phase === 2
             revealAnim.stop()
             root.progress = 0
             root.phase = 1
-            if (wasUp && stage.item) stage.item.recapture()
+            if (rearm && stage.item) stage.item.recapture()
             hardStop.restart()
         }
         function onTransitionReveal() {
@@ -71,10 +71,14 @@ PanelWindow {
         onTriggered: if (root.phase === 1) { root.phase = 2; revealAnim.restart() }
     }
 
+    // instantiated once at startup, not on first freeze — building this tree
+    // mid-gallery-animation was a visible hitch right before the wipe. Idle
+    // cost stays ~0: the window is unmapped, the layer texture is gated on
+    // phase, and a null captureSource holds no capture buffers.
     Loader {
         id: stage
         anchors.fill: parent
-        active: root.phase !== 0
+        active: true
 
         sourceComponent: Item {
             id: comp
@@ -94,7 +98,7 @@ PanelWindow {
                 id: held
                 anchors.fill: parent
                 scale: 1 + 0.012 * root.progress   // barely lifts off as it goes
-                layer.enabled: true
+                layer.enabled: root.phase !== 0
                 layer.effect: MultiEffect {
                     maskEnabled: true
                     maskSource: maskSrc
@@ -105,7 +109,7 @@ PanelWindow {
                 ScreencopyView {
                     id: frozen
                     anchors.fill: parent
-                    captureSource: root.screen
+                    captureSource: root.phase !== 0 ? root.screen : null
                     live: false
                     paintCursor: false
                 }

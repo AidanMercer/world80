@@ -686,11 +686,15 @@ PanelWindow {
                         }
 
                         // a focused motion study starts moving under your gaze:
-                        // one muted player, mounted only after a 400ms dwell
+                        // one muted player, mounted only after a 400ms dwell.
+                        // NOT gated on applying: killing an active MediaPlayer
+                        // is a main-thread hitch, visible right at Enter — let
+                        // it play on and die when the menu closes, hidden
+                        // under the transition's frozen frame
                         Loader {
                             anchors.fill: parent
                             active: plate.focusedPlate && plate.wall && plate.wall.video
-                                    && root.open && !root.applying && dwell.settled
+                                    && root.open && dwell.settled
                             sourceComponent: Item {
                                 anchors.fill: parent
                                 MediaPlayer {
