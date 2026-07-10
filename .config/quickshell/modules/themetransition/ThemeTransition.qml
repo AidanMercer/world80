@@ -28,7 +28,10 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     mask: Region {}                 // never eat a click
-    visible: phase !== 0
+    // don't map until the captured frame is actually in hand — a cover that
+    // appears before its content flashes black for the frames in between.
+    // Until then the live desktop simply stays on screen, which is invisible.
+    visible: phase !== 0 && stage.item !== null && stage.item.ready
 
     // 0 idle · 1 frozen (swap running underneath) · 2 wiping away
     property int phase: 0
@@ -84,6 +87,7 @@ PanelWindow {
             id: comp
             anchors.fill: parent
 
+            readonly property bool ready: frozen.hasContent
             function recapture() { frozen.captureFrame() }
 
             // slab geometry: diag covers the screen at any tilt, the feather is
