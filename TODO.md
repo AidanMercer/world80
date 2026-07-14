@@ -17,6 +17,7 @@
 - [x] better Super+M menu (popup.qml chrome slot)
 - [x] control center (bluetooth/network/display/sound/power tabs)
 - [x] media controls widget (MPRIS)
+- [ ] audio EQ (pipewire filter-chain presets, themed panel — control center sound tab or frostify)
 - [x] clipboard history popup (cliphist)
 - [x] volume / brightness OSD
 
