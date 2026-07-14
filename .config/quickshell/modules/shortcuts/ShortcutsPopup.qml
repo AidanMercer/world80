@@ -7,17 +7,21 @@ import Quickshell.Hyprland
 import Quickshell.Widgets
 import "../common"
 
-// Fullscreen, transparent layer-shell overlay holding a card with two tabs:
-//   • Shortcuts — a "cheat sheet" listing every keybind (hand-maintained).
-//   • Settings  — toggles for shell/system behaviour (keep the laptop awake
-//     when the lid is shut, auto-lock on idle).
+// Fullscreen, transparent layer-shell overlay holding a card with four tabs:
+//   • Shortcuts   — a "cheat sheet" listing every keybind (hand-maintained,
+//     except the app rows, which follow which extensions are installed).
+//   • Settings    — toggles for shell/system behaviour + the update banner.
+//   • Marketplace — browse + download themes.
+//   • Extensions  — install/update the app suite (mica/vellum/pulse/beryl/frostify).
 // Centred on the focused monitor; click the scrim or press Esc to dismiss.
 // Same proven scrim pattern as the launcher / control popup (a
 // HyprlandFocusGrab races the map and often misses).
 //
 // Opened/closed over IPC:
-//   qs ipc call shortcuts toggle     → Shortcuts tab (Super+/)
-//   qs ipc call shortcuts settings   → Settings tab  (Super+Shift+/)
+//   qs ipc call shortcuts toggle      → Shortcuts tab (Super+/)
+//   qs ipc call shortcuts settings    → Settings tab  (Super+Shift+/)
+//   qs ipc call shortcuts marketplace → Marketplace tab
+//   qs ipc call shortcuts extensions  → Extensions tab
 //
 // The bind list below is hand-maintained — if you add/rename a bind in
 // hyprland.conf, update the matching row here so the sheet stays honest.
@@ -26,8 +30,8 @@ PanelWindow {
 
     property bool open: false
     property bool closing: false        // keep mapped through the close fade
-    property int tab: 0                  // 0 = Shortcuts, 1 = Settings, 2 = Marketplace
-    readonly property int tabCount: 3
+    property int tab: 0                  // 0 = Shortcuts, 1 = Settings, 2 = Marketplace, 3 = Extensions
+    readonly property int tabCount: 4
     property int settingsRow: 0          // cursor within the Settings tab
     readonly property int settingsCount: 2 + themeSlots.length
 
@@ -52,6 +56,33 @@ PanelWindow {
     property string mktBusy: ""         // the one theme downloading right now
     property int mktRow: 0              // keyboard cursor within the store list
     property string mktArmedRemove: ""  // theme name whose removal is armed (confirm)
+
+    // ── extensions (the app suite) ──────────────────────────────────────
+    // Install/update/remove the companion apps, marketplace-style. All the
+    // real work lives in ext-install.sh (clone, desktop entry pointed at the
+    // real path, mica's file-picker portal, dep check) — and update re-runs
+    // that setup, so fixes to it reach installs made before them.
+    readonly property string extScript: mktHome + "/.config/quickshell/scripts/ext-install.sh"
+    readonly property var extApps: [
+        { name: "mica",     tagline: "file manager · also the system file picker", bind: ["Super", "E"],   cheat: "Files (mica)",           icon: 0xF07C },
+        { name: "vellum",   tagline: "text & markdown editor",                     bind: ["Super", "N"],   cheat: "Editor (vellum)",        icon: 0xF040 },
+        { name: "pulse",    tagline: "btop-style system dashboard",                bind: ["Super", "Esc"], cheat: "System monitor (pulse)", icon: 0xF080 },
+        { name: "beryl",    tagline: "private, vim-driven browser",                bind: ["Super", "B"],   cheat: "Beryl browser",          icon: 0xF0AC },
+        { name: "frostify", tagline: "frosted Spotify now-playing",                bind: ["Super", "S"],   cheat: "Frostify",               icon: 0xF001 }
+    ]
+    property var extStatus: ({})        // name -> { installed, behind, missing: [] }
+    property bool extChecking: false
+    property string extError: ""
+    property string extBusy: ""         // the one app installing/updating right now
+    property var extProgress: ({})      // name -> { done, total }
+    property int extRow: 0              // keyboard cursor within the extensions list
+    property string extArmedRemove: ""
+    readonly property int extBehindTotal: {
+        let n = 0
+        for (const a of extApps) { const s = extStatus[a.name]; if (s && s.installed) n += s.behind }
+        return n
+    }
+    function extInfo(name) { return root.extStatus[name] ?? { installed: false, behind: 0, missing: [] } }
 
     // ── self-update ─────────────────────────────────────────────────────
     // the engine is a git clone at ~/dotfiles; check if it's behind the remote
@@ -111,21 +142,29 @@ PanelWindow {
     // ── the cheat-sheet data ────────────────────────────────────────────
     // `columns` is an array of columns; each column is an array of sections;
     // each section has a title and a list of binds. A bind's `keys` is the list
-    // of keycap labels rendered left→right with "+" between them.
-    readonly property var columns: [
+    // of keycap labels rendered left→right with "+" between them. The app-suite
+    // rows come from extApps and only show for extensions actually installed.
+    readonly property var columns: {
+        const st = root.extStatus
+        const apps = [
+            { keys: ["Super", "T"],          desc: "Terminal" },
+            { keys: ["Super", "W"],          desc: "Browser" }
+        ]
+        for (const a of root.extApps) {
+            if (!(st[a.name] && st[a.name].installed)) continue
+            apps.push({ keys: a.bind, desc: a.cheat })
+            if (a.name === "beryl") apps.push({ keys: ["Super", "Shift", "B"], desc: "Beryl new window" })
+        }
+        apps.push(
+            { keys: ["Super", "C"],          desc: "Code" },
+            { keys: ["Super", "G"],          desc: "GitHub Desktop" },
+            { keys: ["Super", "Shift", "C"], desc: "Claude" },
+            { keys: ["Super", "R"],          desc: "App launcher" },
+            { keys: ["Super", "P"],          desc: "Command palette" }
+        )
+        return [
         [
-            { title: "Apps", binds: [
-                { keys: ["Super", "T"],          desc: "Terminal" },
-                { keys: ["Super", "W"],          desc: "Browser" },
-                { keys: ["Super", "E"],          desc: "Files" },
-                { keys: ["Super", "N"],          desc: "Editor" },
-                { keys: ["Super", "C"],          desc: "Code" },
-                { keys: ["Super", "G"],          desc: "GitHub Desktop" },
-                { keys: ["Super", "Shift", "C"], desc: "Claude" },
-                { keys: ["Super", "S"],          desc: "Frostify" },
-                { keys: ["Super", "R"],          desc: "App launcher" },
-                { keys: ["Super", "P"],          desc: "Command palette" }
-            ]},
+            { title: "Apps", binds: apps },
             { title: "System", binds: [
                 { keys: ["Super", "M"],          desc: "Control center" },
                 { keys: ["Super", "V"],          desc: "Clipboard history" },
@@ -161,7 +200,8 @@ PanelWindow {
                 { keys: ["Super", "Shift", "\\"], desc: "Reset sync" }
             ]}
         ]
-    ]
+        ]
+    }
 
     // ── persistence + inhibitor ─────────────────────────────────────────
     // State file is read synchronously at startup so the inhibitor comes back
@@ -209,6 +249,7 @@ PanelWindow {
         root.keepAwake = stateFile.text().trim() === "1"
         root.autoLock = autoLockFile.text().trim() === "1"
         autoLockFlag.setText(root.autoLock ? "1\n" : "0\n")
+        root.extScan()   // so the cheat sheet's app rows are right on first open
     }
 
     Process {
@@ -399,6 +440,146 @@ PanelWindow {
         Qt.callLater(() => mktList.positionViewAtBeginning())
     }
 
+    // ── extensions: scan, status, install/update, remove ────────────────
+    // scan = installed dirs only (fast, feeds the cheat sheet); status adds a
+    // git fetch per app for behind-counts. Both emit the same APP lines.
+    Process {
+        id: extScanProc
+        stdout: StdioCollector { onStreamFinished: root.onExtLines(text, false) }
+    }
+    function extScan() {
+        if (extScanProc.running) return
+        extScanProc.command = ["bash", root.extScript, "scan"]
+        extScanProc.running = true
+    }
+    Process {
+        id: extStatusProc
+        stdout: StdioCollector {
+            onStreamFinished: { root.extChecking = false; root.onExtLines(text, true) }
+        }
+    }
+    function extCheck() {
+        if (extStatusProc.running) return
+        root.extChecking = true
+        extStatusProc.command = ["bash", root.extScript, "status"]
+        extStatusProc.running = true
+    }
+    function onExtLines(text, full) {
+        const m = Object.assign({}, root.extStatus)
+        for (const line of (text || "").split("\n")) {
+            const p = line.trim().split(" ")
+            if (p[0] !== "APP" || p.length < 4) continue
+            const name = p[1], inst = p[2] === "1"
+            const prev = m[name] ?? { installed: false, behind: 0, missing: [] }
+            m[name] = {
+                installed: inst,
+                // scan can't know behind-counts — keep the last fetched value
+                behind: full ? (parseInt(p[3]) || 0) : (inst ? prev.behind : 0),
+                missing: inst ? p.slice(4) : []
+            }
+        }
+        root.extStatus = m
+        root.syncBehindState()
+        root.maybeNotifyUpdates()
+    }
+
+    // one install/update at a time, same PROG protocol as the marketplace
+    Process {
+        id: extActProc
+        stdout: SplitParser { onRead: (line) => root.onExtActLine(line) }
+    }
+    function extInstall(name) {   // installs if absent, updates if present
+        if (root.extBusy !== "" || extActProc.running) return
+        root.extBusy = name
+        root.extError = ""
+        root.extArmedRemove = ""
+        const st = Object.assign({}, root.extStatus)
+        const prev = root.extInfo(name)
+        st[name] = { installed: prev.installed, behind: prev.behind, missing: [] }
+        root.extStatus = st       // setup re-reports missing deps if still there
+        const m = Object.assign({}, root.extProgress)
+        m[name] = { done: 0, total: 3 }
+        root.extProgress = m
+        extActProc.command = ["bash", root.extScript,
+                              prev.installed ? "update" : "install", name]
+        extActProc.running = true
+    }
+    function onExtActLine(line) {
+        const p = (line || "").split(" ")
+        if (p[0] === "PROG") {
+            const m = Object.assign({}, root.extProgress)
+            m[root.extBusy] = { done: parseInt(p[1]), total: parseInt(p[2]) }
+            root.extProgress = m
+        } else if (p[0] === "DEPS") {
+            const st = Object.assign({}, root.extStatus)
+            const prev = root.extInfo(p[1])
+            st[p[1]] = { installed: prev.installed, behind: prev.behind, missing: p.slice(2) }
+            root.extStatus = st
+        } else if (p[0] === "DONE") {
+            const st = Object.assign({}, root.extStatus)
+            const prev = root.extInfo(p[1])
+            st[p[1]] = { installed: true, behind: 0, missing: prev.missing }
+            root.extStatus = st
+            const m = Object.assign({}, root.extProgress); delete m[root.extBusy]
+            root.extProgress = m
+            root.extBusy = ""
+            root.syncBehindState()
+        } else if (p[0] === "ERR") {
+            root.extError = line.substring(4)
+            const m = Object.assign({}, root.extProgress); delete m[root.extBusy]
+            root.extProgress = m
+            root.extBusy = ""
+        }
+    }
+
+    Process {
+        id: extRemoveProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const last = (text || "").trim().split("\n").pop() || ""
+                if (last.indexOf("ERR ") === 0) root.extError = last.substring(4)
+                root.extScan()
+            }
+        }
+    }
+    function extRemove(name) {
+        if (extActProc.running || extRemoveProc.running) return
+        root.extError = ""
+        root.extArmedRemove = ""
+        // the script refuses to delete a clone with local changes or unpushed
+        // commits, so a dev checkout can't be eaten from the UI
+        extRemoveProc.command = ["bash", root.extScript, "remove", name]
+        extRemoveProc.running = true
+    }
+
+    // pacman wants a tty for sudo, so dep fixes run in a kitty window; the
+    // script re-runs setup afterwards to finish anything the packages blocked
+    function extFixDeps(name) {
+        Quickshell.execDetached(["kitty", "--title", "world80 · " + name + " deps",
+            "bash", "-c",
+            "bash " + root.extScript + " deps " + name + "; read -rp 'done — press enter to close '"])
+    }
+
+    function enterExtensions() {
+        root.extError = ""
+        root.extArmedRemove = ""
+        root.extRow = 0
+        root.extScan()
+        root.extCheck()
+    }
+    function extMove(d) {
+        root.extArmedRemove = ""
+        root.extRow = Math.max(0, Math.min(root.extApps.length - 1, root.extRow + d))
+    }
+    function extActivate() {
+        const a = root.extApps[root.extRow]
+        if (!a || root.extBusy !== "") return
+        const s = root.extInfo(a.name)
+        if (!s.installed || s.behind > 0) root.extInstall(a.name)
+        else if (root.extArmedRemove === a.name) root.extRemove(a.name)
+        else root.extArmedRemove = a.name        // first press arms the remove
+    }
+
     // ── self-update: fetch + compare HEAD to the tracking branch ─────────
     Process {
         id: updCheckProc
@@ -425,15 +606,28 @@ PanelWindow {
         if (parts[0] === "OFFLINE") { root.updLocal = parts[1] || ""; root.updState = "offline"; return }
         root.updBehind = parseInt(parts[1]) || 0
         root.updLocal = parts[2] || ""
-        root.updState = root.updBehind > 0 ? "behind" : "uptodate"
-        // notify once when a new update appears (again only if more land later)
-        if (root.updBehind > root.updNotifiedBehind) {
-            root.updNotifiedBehind = root.updBehind
+        root.updState = (root.updBehind > 0 || root.extBehindTotal > 0) ? "behind" : "uptodate"
+        root.maybeNotifyUpdates()
+    }
+    // installed-app updates count toward the banner too; called whenever
+    // either side (engine check / extension status) lands a fresh result
+    function syncBehindState() {
+        if (root.updState === "uptodate" && root.extBehindTotal > 0) root.updState = "behind"
+        else if (root.updState === "behind" && root.updBehind === 0 && root.extBehindTotal === 0)
+            root.updState = "uptodate"
+    }
+    // notify once when new updates appear (again only if more land later)
+    function maybeNotifyUpdates() {
+        const total = root.updBehind + root.extBehindTotal
+        if (total > root.updNotifiedBehind) {
+            root.updNotifiedBehind = total
+            const bits = []
+            if (root.updBehind > 0) bits.push(root.updBehind + " engine commit" + (root.updBehind > 1 ? "s" : ""))
+            if (root.extBehindTotal > 0) bits.push(root.extBehindTotal + " app update" + (root.extBehindTotal > 1 ? "s" : ""))
             Quickshell.execDetached(["notify-send", "-a", "world80",
                 "-i", "software-update-available", "world80 update available",
-                root.updBehind + " new commit" + (root.updBehind > 1 ? "s" : "")
-                    + " — open Super+/ → Settings to update"])
-        } else if (root.updBehind === 0) {
+                bits.join(" · ") + " — open Super+/ → Settings to update"])
+        } else if (total === 0) {
             root.updNotifiedBehind = 0     // reset after a successful update
         }
     }
@@ -444,17 +638,41 @@ PanelWindow {
         interval: 120000
         running: true
         repeat: true
-        onTriggered: { root.checkUpdates(); interval = 6 * 3600 * 1000 }
+        onTriggered: { root.checkUpdates(); root.extCheck(); interval = 6 * 3600 * 1000 }
     }
 
     Process {
         id: updPullProc
-        stdout: SplitParser { onRead: (line) => { if (line === "__ok__") root.updState = "done"
-                                                  else if (line === "__fail__") root.updState = "error" } }
+        stdout: SplitParser { onRead: (line) => {
+            if (line === "__ok__") {
+                // engine's in — now bring the installed apps along
+                if (root.extBehindTotal > 0) root.startExtUpdate()
+                else root.updState = "done"
+            } else if (line === "__fail__") root.updState = "error"
+        } }
+    }
+    // update every installed extension: ff-only pull + setup re-run, so the
+    // desktop-entry/portal/dep fixes land even on apps that were already current
+    Process {
+        id: extUpdAllProc
+        stdout: SplitParser { onRead: (line) => {
+            const p = line.split(" ")
+            if (p[0] === "ALLDONE") {
+                root.updState = "done"
+                root.extScan()
+                root.extCheck()
+            }
+        } }
+    }
+    function startExtUpdate() {
+        if (extUpdAllProc.running) return
+        extUpdAllProc.command = ["bash", root.extScript, "update-all"]
+        extUpdAllProc.running = true
     }
     function doUpdate() {
-        if (root.updState !== "behind" || updPullProc.running) return
+        if (root.updState !== "behind" || updPullProc.running || extUpdAllProc.running) return
         root.updState = "pulling"
+        if (root.updBehind === 0) { root.startExtUpdate(); return }   // apps-only update
         // ff-only so a diverged/locally-edited clone fails safe instead of merging
         updPullProc.command = ["bash", "-c",
             'cd "$1" || { echo __fail__; exit 0; }; ' +
@@ -465,6 +683,7 @@ PanelWindow {
 
     onTabChanged: {
         if (tab === 2) enterMarketplace()
+        else if (tab === 3) enterExtensions()
         else if (tab === 1 && (updState === "idle" || updState === "error" || updState === "offline"))
             checkUpdates()
     }
@@ -477,7 +696,9 @@ PanelWindow {
         tab = which
         settingsRow = 0
         scanThemeSlots()
-        if (which === 2) enterMarketplace()   // reopening onto tab 2 won't fire onTabChanged
+        extScan()                             // keep the cheat sheet's app rows honest
+        if (which === 2) enterMarketplace()   // reopening onto tab 2/3 won't fire onTabChanged
+        else if (which === 3) enterExtensions()
         else if (which === 1 && (updState === "idle" || updState === "error" || updState === "offline"))
             checkUpdates()
         open = true
@@ -501,6 +722,10 @@ PanelWindow {
         function marketplace(): void {
             if (root.open && root.tab === 2) root.closeMenu()
             else root.openMenu(2)
+        }
+        function extensions(): void {
+            if (root.open && root.tab === 3) root.closeMenu()
+            else root.openMenu(3)
         }
         // flip auto-lock without opening the sheet (scripts / future keybind)
         function autolock(): void { root.setAutoLock(!root.autoLock) }
@@ -579,6 +804,18 @@ PanelWindow {
                     return
                 }
 
+                // Extensions tab: same nav as the store
+                if (root.tab === 3) {
+                    if (e.key === Qt.Key_Up)   { root.extMove(-1); e.accepted = true; return }
+                    if (e.key === Qt.Key_Down) { root.extMove(1);  e.accepted = true; return }
+                    if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                        root.extActivate(); e.accepted = true; return
+                    }
+                    if (root.extArmedRemove !== "") { root.extArmedRemove = ""; e.accepted = true; return }
+                    e.accepted = true
+                    return
+                }
+
                 if (root.tab === 1) {
                     if (e.key === Qt.Key_Up) {
                         root.settingsRow = Math.max(0, root.settingsRow - 1); e.accepted = true; return
@@ -646,7 +883,7 @@ PanelWindow {
                             spacing: 4
 
                             Repeater {
-                                model: ["Keyboard Shortcuts", "Settings", "Marketplace"]
+                                model: ["Keyboard Shortcuts", "Settings", "Marketplace", "Extensions"]
 
                                 delegate: Rectangle {
                                     id: tabChip
@@ -685,6 +922,7 @@ PanelWindow {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.tab === 2 ? "↑↓ select · ↵ install · esc"
+                             : root.tab === 3 ? "↑↓ select · ↵ install/update · esc"
                              : root.tab === 1 ? "← → switch · Esc close"
                              : "Esc to close"
                         color: Theme.textMuted
@@ -840,8 +1078,13 @@ PanelWindow {
                                     text: {
                                         switch (root.updState) {
                                         case "checking": return "checking for updates…"
-                                        case "behind":   return root.updBehind + " update" + (root.updBehind > 1 ? "s" : "") + " available"
-                                        case "pulling":  return "downloading update…"
+                                        case "behind": {
+                                            const bits = []
+                                            if (root.updBehind > 0) bits.push(root.updBehind + " engine update" + (root.updBehind > 1 ? "s" : ""))
+                                            if (root.extBehindTotal > 0) bits.push(root.extBehindTotal + " app update" + (root.extBehindTotal > 1 ? "s" : ""))
+                                            return bits.join(" · ") + " available"
+                                        }
+                                        case "pulling":  return "downloading updates…"
                                         case "done":     return "updated — press Super+Shift+R to restart the shell"
                                         case "offline":  return "offline · " + root.updLocal
                                         case "error":    return "couldn't check — needs a git clone + network"
@@ -1551,6 +1794,272 @@ PanelWindow {
                                         id: dlMa; anchors.fill: parent; hoverEnabled: true
                                         cursorShape: parent.blocked ? Qt.ArrowCursor : Qt.PointingHandCursor
                                         onClicked: if (!parent.blocked) { root.mktRow = mrow.index; root.installTheme(mrow.modelData) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Extensions tab ──
+                Column {
+                    width: parent.width
+                    spacing: 8
+                    visible: root.tab === 3
+
+                    Text {
+                        width: parent.width
+                        text: root.extError !== "" ? root.extError
+                             : root.extChecking ? "checking for updates…"
+                             : "the world80 app suite — installs set up the launcher entry, keybind row and (for mica) the system file picker"
+                        color: root.extError !== "" ? Theme.danger : Theme.textMuted
+                        font.pixelSize: 11
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                    }
+
+                    Repeater {
+                        model: root.extApps
+
+                        delegate: Rectangle {
+                            id: erow
+                            required property var modelData
+                            required property int index
+                            readonly property var st: root.extInfo(modelData.name)
+                            readonly property var prog: root.extProgress[modelData.name] ?? null
+                            readonly property bool busy: prog !== null
+                            readonly property bool selected: root.extRow === index
+                            readonly property bool armed: root.extArmedRemove === modelData.name
+                            readonly property bool needsDeps: st.missing.length > 0
+
+                            width: parent.width
+                            height: 64
+                            radius: 10
+                            color: erow.selected ? Theme.rowSelected
+                                 : (erowHover.hovered ? Theme.rowHover : "transparent")
+                            border.color: erow.selected ? Theme.accent : Theme.glassBorder
+                            border.width: 1
+
+                            HoverHandler { id: erowHover }
+                            // hovering moves the keyboard cursor so mouse + keys agree
+                            Connections {
+                                target: erowHover
+                                function onHoveredChanged() {
+                                    if (erowHover.hovered && root.extRow !== erow.index) {
+                                        root.extRow = erow.index
+                                        root.extArmedRemove = ""
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: eicon
+                                anchors.left: parent.left
+                                anchors.leftMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 40; height: 40; radius: 9
+                                color: Theme.rowSelected
+                                border.color: Theme.glassBorder; border.width: 1
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: String.fromCodePoint(erow.modelData.icon)
+                                    color: erow.st.installed ? Theme.accent : Theme.textMuted
+                                    font.family: Theme.icon
+                                    font.pixelSize: 18
+                                }
+                            }
+
+                            Column {
+                                anchors.left: eicon.right
+                                anchors.leftMargin: 14
+                                anchors.right: eaction.left
+                                anchors.rightMargin: 14
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                Row {
+                                    spacing: 8
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: erow.modelData.name
+                                        color: Theme.textBright
+                                        font.pixelSize: 15
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 17; width: ebind.implicitWidth + 12; radius: 4
+                                        color: "transparent"
+                                        border.color: Theme.glassBorder; border.width: 1
+                                        Text {
+                                            id: ebind; anchors.centerIn: parent
+                                            text: erow.modelData.bind.join("+")
+                                            color: Theme.textMuted
+                                            font.family: Theme.mono
+                                            font.pixelSize: 10
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: erow.needsDeps ? "missing packages: " + erow.st.missing.join(" ")
+                                                         : erow.modelData.tagline
+                                    color: erow.needsDeps ? Theme.danger : Theme.textSecondary
+                                    font.pixelSize: 11
+                                    textFormat: Text.PlainText
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            // ── right-side action, state-driven ──
+                            Item {
+                                id: eaction
+                                anchors.right: parent.right
+                                anchors.rightMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 190; height: 48
+
+                                // working: progress bar
+                                Column {
+                                    anchors.centerIn: parent
+                                    width: parent.width
+                                    spacing: 6
+                                    visible: erow.busy
+                                    Text {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: erow.prog ? ((erow.st.installed ? "updating " : "installing ")
+                                                          + erow.prog.done + "/" + erow.prog.total) : ""
+                                        color: Theme.textSecondary
+                                        font.pixelSize: 11
+                                    }
+                                    Rectangle {
+                                        width: parent.width; height: 6; radius: 3
+                                        color: Theme.trackBg
+                                        border.color: Theme.glassBorder; border.width: 1
+                                        Rectangle {
+                                            height: parent.height; radius: 3
+                                            width: parent.width * (erow.prog && erow.prog.total > 0
+                                                   ? erow.prog.done / erow.prog.total : 0)
+                                            color: Theme.accent
+                                            Behavior on width { NumberAnimation { duration: 180 } }
+                                        }
+                                    }
+                                }
+
+                                // armed for removal: confirm / cancel
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    visible: erow.armed && !erow.busy
+                                    Rectangle {
+                                        width: ecfT.implicitWidth + 18; height: 26; radius: 7
+                                        color: ecfMa.containsMouse ? Theme.danger
+                                             : Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.18)
+                                        border.color: Theme.danger; border.width: 1
+                                        Text { id: ecfT; anchors.centerIn: parent; text: "remove"
+                                               color: Theme.textBright; font.pixelSize: 12 }
+                                        MouseArea { id: ecfMa; anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.extRemove(erow.modelData.name) }
+                                    }
+                                    Rectangle {
+                                        width: ecnT.implicitWidth + 16; height: 26; radius: 7
+                                        color: ecnMa.containsMouse ? Theme.rowSelected : Theme.rowHover
+                                        border.color: Theme.glassBorder; border.width: 1
+                                        Text { id: ecnT; anchors.centerIn: parent; text: "cancel"
+                                               color: Theme.textSecondary; font.pixelSize: 12 }
+                                        MouseArea { id: ecnMa; anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.extArmedRemove = "" }
+                                    }
+                                }
+
+                                // installed: fix-deps / update when needed, else a quiet tick + remove
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 6
+                                    visible: erow.st.installed && !erow.busy && !erow.armed
+
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: erow.needsDeps
+                                        width: edT.implicitWidth + 18; height: 30; radius: 8
+                                        color: edMa.containsMouse ? Theme.accent : Theme.rowSelected
+                                        border.color: Theme.accent; border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 140 } }
+                                        Text { id: edT; anchors.centerIn: parent; text: "fix deps"
+                                               color: Theme.textBright; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                        MouseArea { id: edMa; anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.extFixDeps(erow.modelData.name) }
+                                    }
+
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: erow.st.behind > 0
+                                        readonly property bool blocked: root.extBusy !== ""
+                                        width: euT.implicitWidth + 20; height: 30; radius: 8
+                                        color: euMa.containsMouse && !blocked ? Theme.accent : Theme.rowSelected
+                                        border.color: Theme.accent; border.width: 1
+                                        opacity: blocked ? 0.5 : 1
+                                        Behavior on color { ColorAnimation { duration: 140 } }
+                                        Text { id: euT; anchors.centerIn: parent
+                                               text: "update · " + erow.st.behind
+                                               color: Theme.textBright; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                        MouseArea { id: euMa; anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: parent.blocked ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                            onClicked: if (!parent.blocked) { root.extRow = erow.index; root.extInstall(erow.modelData.name) } }
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: !erow.needsDeps && erow.st.behind === 0
+                                        text: "✓ installed"
+                                        color: Theme.textMuted
+                                        font.pixelSize: 11
+                                    }
+
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: ermT.implicitWidth + 18; height: 30; radius: 8
+                                        color: ermMa.containsMouse
+                                               ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.16) : "transparent"
+                                        border.color: ermMa.containsMouse ? Theme.danger : Theme.glassBorder
+                                        border.width: 1
+                                        Text { id: ermT; anchors.centerIn: parent; text: "remove"
+                                               color: ermMa.containsMouse ? Theme.danger : Theme.textMuted
+                                               font.pixelSize: 12 }
+                                        MouseArea { id: ermMa; anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: { root.extRow = erow.index; root.extArmedRemove = erow.modelData.name } }
+                                    }
+                                }
+
+                                // absent: install button
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: !erow.st.installed && !erow.busy && !erow.armed
+                                    readonly property bool blocked: root.extBusy !== ""
+                                    width: 96; height: 34; radius: 9
+                                    color: eiMa.containsMouse && !blocked ? Theme.accent : Theme.rowSelected
+                                    border.color: blocked ? Theme.glassBorder : Theme.accent
+                                    border.width: 1
+                                    opacity: blocked ? 0.5 : 1
+                                    Behavior on color { ColorAnimation { duration: 140 } }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "⭳  install"
+                                        color: Theme.textBright
+                                        font.pixelSize: 13
+                                        font.weight: Font.DemiBold
+                                    }
+                                    MouseArea {
+                                        id: eiMa; anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: parent.blocked ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                        onClicked: if (!parent.blocked) { root.extRow = erow.index; root.extInstall(erow.modelData.name) }
                                     }
                                 }
                             }

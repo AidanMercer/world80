@@ -18,7 +18,6 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$HOME/.config/world80-backup-$(date +%Y%m%d-%H%M%S)"
 THEMES_REPO="AidanMercer/themes"        # marketplace source (pinned)
-FROSTIFY_REPO="https://github.com/AidanMercer/frostify"
 STARTER_THEME="moon"                    # seeded so the desktop looks alive day one
 
 DO_PACKAGES=1 DO_THEME=1 DO_FROSTIFY=1 DO_APPS=1 ASSUME_YES=0
@@ -247,20 +246,27 @@ if ask "enable NetworkManager + bluetooth (system) and wireplumber (user)?"; the
   ok "services enabled"
 else skip "services left alone"; fi
 
-# ── frostify (optional, separate app that fills the frostify.qml slot) ────
+# ── app suite (optional, separate repos behind the Super+E/N/B/S/Escape binds) ─
+# each install goes through ext-install.sh — the same script the Super+/
+# Extensions tab uses — so a CLI install gets the identical setup: clone,
+# desktop entry pointing at the real path, mica's file-picker portal, dep check.
+EXT_SH="$REPO_DIR/.config/quickshell/scripts/ext-install.sh"
+ext_install() { # $1 = app name
+  local out deps
+  out="$(bash "$EXT_SH" install "$1" 2>/dev/null)" || true
+  if grep -q '^DONE' <<<"$out"; then ok "$1 installed (+ desktop entry)"
+  else warn "$1: $(grep '^ERR' <<<"$out" | head -1 | cut -d' ' -f2- || echo 'install failed')"; fi
+  deps="$(grep '^DEPS' <<<"$out" | cut -d' ' -f3-)"
+  [ -n "$deps" ] && warn "$1 still needs: $deps (install with pacman/paru, then re-run)"
+}
+
 if [ "$DO_FROSTIFY" = 1 ] && [ ! -d "$HOME/frostify" ]; then
   say "Frostify (optional)"
   echo "  A full-screen now-playing overlay — album art, playlists, and playback"
   echo "  controls — that follows Spotify/MPRIS and matches your active theme (Super+S)."
-  if ask "install Frostify to ~/frostify?"; then
-    git clone --depth 1 "$FROSTIFY_REPO" "$HOME/frostify" && ok "cloned ~/frostify" \
-      || warn "clone failed — set FROSTIFY_REPO at the top of this script if the URL is wrong"
-  fi
+  ask "install Frostify to ~/frostify?" && ext_install frostify
 fi
 
-# ── app suite (optional, separate repos behind the Super+E/N/B/Escape binds) ─
-# clone-only installs: each app is a wrapper script + a python package that runs
-# on the system pyside6 (already in packages.txt, with qt6-webengine for beryl).
 if [ "$DO_APPS" = 1 ]; then
   say "App suite (optional)"
   echo "  Theme-following companions, each its own repo under ~/dev:"
@@ -268,11 +274,7 @@ if [ "$DO_APPS" = 1 ]; then
   echo "    pulse (system monitor, Super+Escape) · beryl (browser, Super+B)"
   for app in mica vellum pulse beryl; do
     if [ -d "$HOME/dev/$app" ]; then skip "$app (already at ~/dev/$app)"; continue; fi
-    if ask "install $app to ~/dev/$app?"; then
-      mkdir -p "$HOME/dev"
-      git clone --depth 1 "https://github.com/AidanMercer/$app" "$HOME/dev/$app" \
-        && ok "cloned ~/dev/$app" || warn "$app clone failed"
-    fi
+    ask "install $app to ~/dev/$app?" && ext_install "$app"
   done
 else
   skip "app suite skipped (--no-apps)"
@@ -288,7 +290,7 @@ cat <<EOF
   (auto, 1x scale) isn't right. The wallpaper restores to your last-applied
   theme on login (or a starter one if you seeded any).${c_off}
 
-  Keys:  Super+/ this cheatsheet (+ Marketplace tab) · Super+Shift+T themes ·
+  Keys:  Super+/ this cheatsheet (+ Marketplace & Extensions tabs) · Super+Shift+T themes ·
          Super+R launcher · Super+M control center ·
          Super+E files · Super+N editor · Super+B browser · Super+Escape monitor
 $( [ -d "${BACKUP_DIR}" ] && printf "\n  Backed-up originals are in %s\n" "$BACKUP_DIR" )

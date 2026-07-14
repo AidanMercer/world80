@@ -28,6 +28,7 @@
 - [ ] image / gallery viewer (keyboard-driven, themed, pairs with mica)
 - [ ] pdf / document reader (vim keys, themed chrome)
 - [x] system dashboard (pulse — full-window btop-style cpu/mem/net/disks/procs, keyboard-driven, Super+Escape, ~/dev/pulse)
+- [x] extensions store (Super+/ 4th tab — install/update/remove the app suite via ext-install.sh; installs wire the desktop entry, cheat-sheet row and mica's picker portal; the Settings update pulls installed apps too)
 
 ## Theme settings & layout
 - [x] per-theme settings in the Super+Shift+/ sheet (clock/visualizer/sysinfo/lyrics toggles, ThemeSettings singleton, loaders unmount live)

@@ -63,6 +63,7 @@ PanelWindow {
         a.push({ title: "Keybind cheat sheet",   cat: "Open",    run: () => root.ipc("shortcuts", "toggle") })
         a.push({ title: "Settings",              cat: "Open",    run: () => root.ipc("shortcuts", "settings") })
         a.push({ title: "Theme marketplace",     cat: "Open",    run: () => root.ipc("shortcuts", "marketplace") })
+        a.push({ title: "Extensions",            cat: "Open",    run: () => root.ipc("shortcuts", "extensions") })
 
         a.push({ title: "Toggle auto-lock",      cat: "Toggle",  run: () => root.ipc("shortcuts", "autolock") })
         a.push({ title: "Pin system info",       cat: "Toggle",  run: () => root.ipc("sysinfo", "toggle") })
