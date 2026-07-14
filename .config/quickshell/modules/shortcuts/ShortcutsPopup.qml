@@ -164,13 +164,13 @@ PanelWindow {
         apps.push(
             { keys: ["Super", "C"],          desc: "Code" },
             { keys: ["Super", "G"],          desc: "GitHub Desktop" },
-            { keys: ["Super", "Shift", "C"], desc: "Claude" },
-            { keys: ["Super", "R"],          desc: "App launcher" },
             { keys: ["Super", "P"],          desc: "Command palette" }
         )
         return [
         [
-            { title: "Apps", binds: apps },
+            { title: "Apps", binds: apps }
+        ],
+        [
             { title: "System", binds: [
                 { keys: ["Super", "M"],          desc: "Control center" },
                 { keys: ["Super", "V"],          desc: "Clipboard history" },
@@ -182,11 +182,10 @@ PanelWindow {
                 { keys: ["Super", "Shift", "/"], desc: "Settings" },
                 { keys: ["Super", "."],          desc: "Pin system info" }
             ]},
-            { title: "Workspaces", binds: [
-                { keys: ["Super", "1 – 5"],            desc: "Switch workspace" },
-                { keys: ["Super", "Scroll"],          desc: "Cycle this monitor" },
-                { keys: ["Super", "Ctrl", "← →"],     desc: "Prev / next" },
-                { keys: ["Super", "Ctrl", "Shift", "← →"], desc: "Carry window" }
+            { title: "Lyrics", binds: [
+                { keys: ["Super", "]"],          desc: "Sync later" },
+                { keys: ["Super", "["],          desc: "Sync earlier" },
+                { keys: ["Super", "Shift", "\\"], desc: "Reset sync" }
             ]}
         ],
         [
@@ -200,10 +199,11 @@ PanelWindow {
                 { keys: ["Super", "Shift", "← →"],   desc: "Send to monitor" },
                 { keys: ["Super", "Shift", "↑ ↓"],   desc: "Move in layout" }
             ]},
-            { title: "Lyrics", binds: [
-                { keys: ["Super", "]"],          desc: "Sync later" },
-                { keys: ["Super", "["],          desc: "Sync earlier" },
-                { keys: ["Super", "Shift", "\\"], desc: "Reset sync" }
+            { title: "Workspaces", binds: [
+                { keys: ["Super", "1 – 5"],            desc: "Switch workspace" },
+                { keys: ["Super", "Scroll"],          desc: "Cycle this monitor" },
+                { keys: ["Super", "Ctrl", "← →"],     desc: "Prev / next" },
+                { keys: ["Super", "Ctrl", "Shift", "← →"], desc: "Carry window" }
             ]}
         ]
         ]
@@ -780,7 +780,9 @@ PanelWindow {
 
         Rectangle {
             id: card
-            width: 816
+            // the shortcuts sheet goes wide (3 columns) so it stays short; the
+            // other tabs keep their designed width
+            width: root.tab === 0 ? 1080 : 816
             height: content.implicitHeight + 40
             radius: Theme.popupRadius
             color: Theme.glassBg
@@ -788,6 +790,7 @@ PanelWindow {
             border.width: 1
             focus: true
 
+            Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
             Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
             // Esc / click-outside always close. Left/Right switch tabs. The
@@ -952,7 +955,7 @@ PanelWindow {
                         delegate: Column {
                             id: col
                             required property var modelData    // array of sections
-                            width: (parent.width - parent.spacing) / 2
+                            width: (parent.width - parent.spacing * (root.columns.length - 1)) / root.columns.length
                             spacing: 18
 
                             Repeater {
