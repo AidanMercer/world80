@@ -27,8 +27,39 @@ Item {
 
     property real progress: 0
 
-    Component.onCompleted: { inAnim.start(); rescan() }
-    onUnlockingChanged: if (unlocking) { inAnim.stop(); outAnim.start() }
+    // cold-boot intro: on a fresh boot the lock is the first thing on screen, so
+    // instead of the usual chrome-assemble we play a "power-on" first. bootReveal
+    // holds at 1 (black tube warming) then falls to 0 as the curtain lifts; only
+    // then does progress ramp and the normal chrome come in. A theme whose
+    // lock.qml carries the `coldBootOwner` marker draws its own boot sequence
+    // (reading host.coldBoot / host.bootReveal) and the generic curtain below
+    // stands down — same idea as bareLock.
+    property bool coldBoot: false
+    property real bootReveal: 0
+
+    // defer one tick so a Loader-injected coldBoot binding is settled before we
+    // pick the intro — otherwise onCompleted reads coldBoot=false and we fall
+    // through to the plain fade, skipping the power-on
+    property bool introStarted: false
+    function startIntro() {
+        if (introStarted || unlocking) return
+        introStarted = true
+        if (coldBoot) bootSeq.start()
+        else inAnim.start()
+    }
+    Component.onCompleted: { rescan(); Qt.callLater(startIntro) }
+    onUnlockingChanged: if (unlocking) { inAnim.stop(); bootSeq.stop(); outAnim.start() }
+
+    SequentialAnimation {
+        id: bootSeq
+        PropertyAction { target: stage; property: "bootReveal"; value: 1 }
+        PauseAnimation { duration: 460 }
+        NumberAnimation {
+            target: stage; property: "bootReveal"
+            to: 0; duration: 900; easing.type: Easing.OutCubic
+        }
+        ScriptAction { script: inAnim.start() }
+    }
 
     NumberAnimation {
         id: inAnim
@@ -72,6 +103,9 @@ Item {
     property string overlayPath: ""
     // overlay carries the `bareLock` marker → it owns all the lock chrome
     property bool bareOverlay: false
+    // overlay carries the `coldBootOwner` marker → it draws its own cold-boot
+    // power-on and the generic CRT curtain below stands down
+    property bool coldOwned: false
     property ThemePalette pal: ThemePalette { themeDir: stage.themeDir }
 
     Process {
@@ -80,10 +114,13 @@ Item {
             onStreamFinished: {
                 const parts = text.trim().split("\t")
                 const p = parts[0] || ""
-                const bare = parts.length > 1
-                if (p !== stage.overlayPath || bare !== stage.bareOverlay) {
+                const bare = parts.indexOf("BARE") >= 0
+                const cold = parts.indexOf("COLD") >= 0
+                if (p !== stage.overlayPath || bare !== stage.bareOverlay
+                        || cold !== stage.coldOwned) {
                     stage.overlayPath = p
                     stage.bareOverlay = bare
+                    stage.coldOwned = cold
                     stage.remount()
                 }
             }
@@ -93,7 +130,8 @@ Item {
     function rescan() {
         existProc.command = ["bash", "-c",
             'd="$1"; f="$d/lock.qml"; { [ -n "$d" ] && [ -f "$f" ]; } || exit 0; ' +
-            'printf "%s" "$f"; grep -q "bareLock" "$f" && printf "\\tBARE"; true',
+            'printf "%s" "$f"; grep -q "bareLock" "$f" && printf "\\tBARE"; ' +
+            'grep -q "coldBootOwner" "$f" && printf "\\tCOLD"; true',
             "_", stage.themeDir]
         existProc.running = true
     }
@@ -108,5 +146,35 @@ Item {
         if (stage.overlayPath === "") { overlayLoader.source = ""; return }
         overlayLoader.setSource(stage.fileUrl(stage.overlayPath),
                                 { pal: stage.pal, host: stage })
+    }
+
+    // ── generic cold-boot power-on (CRT curtain) ─────────────────────────────
+    // default reveal for themes that don't own the cold boot: two black halves
+    // retract from a bright seam, like a tube warming up. Topmost, so it covers
+    // whatever chrome is assembling underneath.
+    Item {
+        anchors.fill: parent
+        z: 100
+        visible: stage.coldBoot && !stage.coldOwned && stage.bootReveal > 0.001
+
+        Rectangle {
+            width: parent.width
+            anchors.top: parent.top
+            height: parent.height * 0.5 * stage.bootReveal
+            color: "black"
+        }
+        Rectangle {
+            width: parent.width
+            anchors.bottom: parent.bottom
+            height: parent.height * 0.5 * stage.bootReveal
+            color: "black"
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width
+            height: 2
+            color: "#e6ecff"
+            opacity: Math.max(0, (stage.bootReveal - 0.25) / 0.75)
+        }
     }
 }
