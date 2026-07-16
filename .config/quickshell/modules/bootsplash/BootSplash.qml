@@ -31,13 +31,24 @@ Scope {
     onLeavingChanged: if (leaving) teardown.restart()
     Timer { id: teardown; interval: 900; onTriggered: root.showing = false }
 
-    Process {
-        running: true
-        command: ["bash", "-c",
-            'f="${XDG_RUNTIME_DIR:-/tmp}/qs-booted"; ' +
-            'if [ -e "$f" ]; then echo warm; else echo cold; : > "$f"; fi']
-        stdout: StdioCollector {
-            onStreamFinished: if (text.trim() === "cold") root.begin()
+    // synchronous cold-boot check: an async probe mounts the veil a beat after
+    // the rest of the shell, letting the assembling desktop flash through first
+    FileView {
+        id: bootMarker
+        path: {
+            const rt = Quickshell.env("XDG_RUNTIME_DIR")
+            return ((rt && String(rt).length) ? String(rt) : "/tmp") + "/qs-booted"
+        }
+        blockLoading: true
+        preload: true
+        printErrors: false
+    }
+    Component.onCompleted: {
+        let cold = true
+        try { cold = bootMarker.text().trim() === "" } catch (e) {}
+        if (cold) {
+            bootMarker.setText("1\n")
+            begin()
         }
     }
 
