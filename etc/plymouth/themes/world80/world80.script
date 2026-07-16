@@ -1,0 +1,35 @@
+# same look as the quickshell boot splash, so plymouth hands off seamlessly
+Window.SetBackgroundTopColor(0.020, 0.020, 0.031);
+Window.SetBackgroundBottomColor(0.020, 0.020, 0.031);
+
+wordmark.image = Image("wordmark.png");
+wordmark.sprite = Sprite(wordmark.image);
+
+track_w = wordmark.image.GetWidth();
+track.image = Image("pixel_dim.png").Scale(track_w, 2);
+track.sprite = Sprite(track.image);
+
+sweep_w = Math.Int(track_w * 0.3);
+sweep.image = Image("pixel_bright.png").Scale(sweep_w, 2);
+sweep.sprite = Sprite(sweep.image);
+
+wm_x = Window.GetX() + Window.GetWidth() / 2 - wordmark.image.GetWidth() / 2;
+wm_y = Window.GetY() + Window.GetHeight() / 2 - wordmark.image.GetHeight() / 2 - 14;
+bar_y = wm_y + wordmark.image.GetHeight() + 26;
+
+wordmark.sprite.SetPosition(wm_x, wm_y, 10);
+track.sprite.SetPosition(wm_x, bar_y, 10);
+sweep.sprite.SetPosition(wm_x, bar_y, 11);
+
+# plymouth can't clip sprites, so the sweep ping-pongs instead of wrapping
+t = 0;
+fun refresh_callback() {
+    t++;
+    period = 55;   # refresh runs ~50/s, so one pass ≈ 1.1s
+    frac = (t - Math.Int(t / period) * period) / period;
+    frac = frac * 2;
+    if (frac > 1)
+        frac = 2 - frac;
+    sweep.sprite.SetX(wm_x + (track_w - sweep_w) * frac);
+}
+Plymouth.SetRefreshFunction(refresh_callback);

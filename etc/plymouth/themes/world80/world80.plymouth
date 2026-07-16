@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=world80
+Description=world80 boot splash — wordmark + sweeping loading line
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/world80
+ScriptFile=/usr/share/plymouth/themes/world80/world80.script
