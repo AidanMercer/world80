@@ -41,6 +41,26 @@ Apply:
 Rescue: a broken tty1 doesn't take the others with it — Ctrl+Alt+F2 is a normal
 login; delete the drop-in and `systemctl daemon-reload` to revert.
 
+## systemd/plymouth-quit-fallback.service (+ quit-unit masks)
+
+Splash handoff: normally systemd kills plymouth the moment getty starts, so the
+boot animation dies early and the screen sits black until the qs veil. Masking
+the two quit units lets plymouth animate through the whole autologin; the fish
+autostart then freezes its last frame (`plymouth quit --retain-splash`) right
+before launching Hyprland. The fallback unit is the safety net: if that handoff
+ever fails (so plymouth would hold the GPU and block the compositor), it
+force-quits the splash ~8s in — worst case is a slow boot, never a stuck one.
+
+Apply:
+
+    sudo systemctl mask plymouth-quit.service plymouth-quit-wait.service
+    sudo cp etc/systemd/plymouth-quit-fallback.service /etc/systemd/system/
+    sudo systemctl enable plymouth-quit-fallback.service
+
+Rescue / revert: Ctrl+Alt+F2, then
+`sudo systemctl unmask plymouth-quit.service plymouth-quit-wait.service`
+and disable the fallback unit.
+
 ## pam.d/hyprlock
 
 Custom PAM stack for hyprlock. Identical to the system `system-auth` auth block

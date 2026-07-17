@@ -1,0 +1,9 @@
+[Unit]
+Description=failsafe: quit plymouth if the session handoff never did
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 8; plymouth quit --retain-splash 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
