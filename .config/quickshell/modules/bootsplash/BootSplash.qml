@@ -30,11 +30,14 @@ Scope {
         showing = true
         minHold.restart()
         maxHold.restart()
-        // the splash owns the wallpaper restore: firing it only once the veil
-        // exists guarantees the desktop dresses behind it, no sleep-racing.
-        // idempotent, so replaying via demo just re-sets the same wallpaper.
-        restoreWall.running = true
     }
+    // the splash owns the wallpaper restore, but firing it when the veil merely
+    // EXISTS still loses the race — at cold boot the render thread is busy and
+    // the veil's first frame lands after awww starts fading the wallpaper in
+    // (a visible blink). presented flips on the veil's first frameSwapped, so
+    // the restore can't start before the curtain is actually on screen.
+    property bool presented: false
+    onPresentedChanged: if (presented) restoreWall.running = true
     Process {
         id: restoreWall
         command: ["sh", Quickshell.env("HOME") + "/dotfiles/.config/hypr/restore-wallpaper.sh"]
@@ -113,6 +116,12 @@ Scope {
                 color: "#050508"
                 opacity: root.leaving ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: 700; easing.type: Easing.InOutQuad } }
+
+                Connections {
+                    target: veil.Window.window
+                    enabled: !root.presented
+                    function onFrameSwapped() { root.presented = true }
+                }
 
                 Column {
                     anchors.centerIn: parent
