@@ -46,7 +46,7 @@ Scope {
         if (showing && !leaving && minHoldDone && wallReady) leaving = true
     }
     onLeavingChanged: if (leaving) teardown.restart()
-    Timer { id: teardown; interval: 900; onTriggered: root.showing = false }
+    Timer { id: teardown; interval: 700; onTriggered: root.showing = false }
 
     // synchronous cold-boot check: an async probe mounts the veil a beat after
     // the rest of the shell, letting the assembling desktop flash through first
@@ -72,7 +72,7 @@ Scope {
     }
 
     Timer {
-        id: minHold; interval: 1500
+        id: minHold; interval: 800
         onTriggered: { root.minHoldDone = true; root.maybeFinish() }
     }
     // never hold the desktop hostage if awww is being slow
@@ -115,7 +115,7 @@ Scope {
                 anchors.fill: parent
                 color: "#050508"
                 opacity: root.leaving ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 700; easing.type: Easing.InOutQuad } }
+                Behavior on opacity { NumberAnimation { duration: 550; easing.type: Easing.InOutQuad } }
 
                 Connections {
                     target: veil.Window.window

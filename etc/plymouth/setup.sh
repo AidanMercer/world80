@@ -18,7 +18,7 @@ echo "backups stamped .bak-$ts"
 mkdir -p /usr/share/plymouth/themes/world80
 cp "$here"/themes/world80/* /usr/share/plymouth/themes/world80/
 
-sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
+sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
 sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=hidden/' /etc/default/grub
 grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*splash' /etc/default/grub || \
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 splash"/' /etc/default/grub
