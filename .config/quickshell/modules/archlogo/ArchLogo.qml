@@ -126,10 +126,13 @@ PanelWindow {
         onFileChanged: { root.rescan(); root.reloadNonce++ }
     }
 
-    // default Arch visualizer — once we know the theme ships no cava.qml
+    // default Arch visualizer — once we know the theme ships no cava.qml.
+    // themeDir "" means no wallpaper yet (normal mid-boot now that the daemon
+    // starts empty) — mount nothing, or the triangle flashes at the reveal
+    // before the restored theme's cava takes over.
     Loader {
         anchors.fill: parent
-        active: root.checked && root.cavaPath === "" && root.slotOn
+        active: root.checked && root.themeDir !== "" && root.cavaPath === "" && root.slotOn
         sourceComponent: archComponent
     }
     Component {
