@@ -73,6 +73,11 @@ manager — the rice boots to tty1 and the fish autostart (`.config/fish/conf.d/
 the compositor; see `etc/README.md` for the autologin + splash side of that. Set your
 displays in `~/.config/hypr/monitors.conf` if the default isn't right.
 
+The themed screen on the way in is plymouth, not a greeter: `etc/plymouth/themes/world80`
+animates from GRUB through the silent autologin and freezes into the shell's own veil, so
+there's no login prompt anywhere in the chain. `etc/plymouth/setup.sh` installs it and
+rebuilds the initramfs — the theme is baked in there, so rerun it after editing the script.
+
 ## Keys
 
 | | |
