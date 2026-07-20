@@ -50,11 +50,25 @@ incoming="$dest_root/.$name.incoming.$$"
 rm -rf "$incoming"
 mv "$work" "$incoming"
 printf '%s\n' "$commit" > "$incoming/.mkt-version"
-rm -rf "$dest_root/$name"
-mv "$incoming" "$dest_root/$name"
 
-# the swap just deleted any locally-extracted video stills — regrow them now
-# so an update of the live theme doesn't leave awww/lock pointing at nothing
+# carry over anything the catalog doesn't ship — local-only wallpapers (moon's
+# gitignored 176MB wallpaper2.mp4), extracted stills, hand edits. incoming sits
+# on the same fs as the theme dir, so these are renames, not copies.
+old="$dest_root/$name"
+if [ -d "$old" ]; then
+  while IFS= read -r -d '' f; do
+    rel="${f#"$old"/}"
+    [ -e "$incoming/$rel" ] && continue
+    # a still whose video just got redownloaded is stale — let ffmpeg regrow it
+    case "$rel" in *.still.png) [ -e "$incoming/${rel%.still.png}.mp4" ] && continue ;; esac
+    mkdir -p "$(dirname "$incoming/$rel")"
+    mv "$f" "$incoming/$rel" 2>/dev/null || cp -a "$f" "$incoming/$rel"
+  done < <(find "$old" \( -type f -o -type l \) -print0)
+fi
+rm -rf "$old"
+mv "$incoming" "$old"
+
+# stills for any video that arrived without one
 if command -v ffmpeg >/dev/null; then
   for v in "$dest_root/$name"/wallpaper*.mp4; do
     [ -e "$v" ] || continue
