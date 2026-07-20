@@ -21,13 +21,50 @@ Scope {
     property var popups: []
     readonly property int maxVisible: 5
 
-    // remove by index, not identity — synthetic JS-object cards (battery,
-    // portal) come out of the Repeater's modelData as copies, so `x !== n`
-    // matched nothing and the X just rebuilt the card
+    // popupModel mirrors popups row-for-row and is what the stack actually draws.
+    // Handing the Repeater the plain array made Qt tear down and rebuild every
+    // delegate on each arrival, so a burst restarted all the dismiss timers and
+    // replayed every entrance; a ListModel insert only builds the new card. The
+    // rows carry an id rather than the note itself — real Notifications are
+    // QObjects that won't take an extra property and ListModel copies plain JS
+    // objects, which is the identity trap that forced index-based removal here
+    // in the first place. Cards resolve their note through noteById once, so
+    // they keep pointing at the right one no matter how the indices shift.
+    ListModel { id: popupModel }
+    property var noteById: ({})
+    property int popupSeq: 0
+
+    function noteFor(pid) { return scope.noteById[pid] || null }
+
+    function addPopup(n) {
+        const pid = ++scope.popupSeq
+        scope.noteById[pid] = n
+        scope.popups = [n, ...scope.popups]
+        popupModel.insert(0, { pid: pid })
+        // whatever falls off the end is still tracked in the server — dismissing
+        // it is what frees it (and its image payload)
+        while (scope.popups.length > scope.maxVisible)
+            scope.removeAt(scope.popups.length - 1)
+    }
+
     function removeAt(i) {
+        if (i < 0 || i >= popupModel.count) return
         const n = scope.popups[i]
+        const pid = popupModel.get(i).pid
+        popupModel.remove(i)
+        delete scope.noteById[pid]
         scope.popups = scope.popups.filter((x, xi) => xi !== i)
         if (n && n.dismiss) n.dismiss()
+    }
+
+    function removeId(pid) {
+        for (let i = 0; i < popupModel.count; i++)
+            if (popupModel.get(i).pid === pid) { scope.removeAt(i); return }
+    }
+
+    function removeWhere(pred) {
+        for (let i = scope.popups.length - 1; i >= 0; i--)
+            if (pred(scope.popups[i])) scope.removeAt(i)
     }
 
     // ── history + do-not-disturb ────────────────────────────────────────
@@ -57,17 +94,14 @@ Scope {
     function push(note) {
         scope.record(note)
         if (scope.dnd && note.urgency !== NotificationUrgency.Critical) return
-        scope.popups = [note, ...scope.popups].slice(0, scope.maxVisible)
+        scope.addPopup(note)
     }
 
     function setDnd(v) {
         if (scope.dnd === v) return
         scope.dnd = v
-        if (v) {
-            // going quiet dismisses whatever's up right now too
-            for (const x of scope.popups) if (x.dismiss) x.dismiss()
-            scope.popups = []
-        }
+        // going quiet dismisses whatever's up right now too
+        if (v) scope.removeWhere(() => true)
         scope.saveState()
     }
 
@@ -142,7 +176,7 @@ Scope {
         } else if (state === "full" || state === "none") {
             // signed in (or left the network) — retire every portal card
             if (scope.portalShowing)
-                scope.popups = scope.popups.filter(x => x.portal !== true)
+                scope.removeWhere(x => x.portal === true)
         }
     }
 
@@ -265,7 +299,7 @@ Scope {
         // no charging announcement — laptops flap Charging/Full/Not charging and
         // that flapping was firing a card every poll.
         if (charging && !wasCharging)
-            scope.popups = scope.popups.filter(x => x.batteryWarn !== true)
+            scope.removeWhere(x => x.batteryWarn === true)
 
         // low / critical — only while actually running down
         if (status === "Discharging") {
@@ -344,12 +378,7 @@ Scope {
                 n.dismiss()   // straight to history
                 return
             }
-            const next = [n, ...scope.popups]
-            scope.popups = next.slice(0, scope.maxVisible)
-            // whatever fell off the end is still tracked in the server — dismiss
-            // it or it (and its image payload) is retained forever
-            for (const x of next.slice(scope.maxVisible))
-                if (x.dismiss) x.dismiss()
+            scope.addPopup(n)
         }
     }
 
@@ -440,17 +469,19 @@ Scope {
             spacing: 8
 
             Repeater {
-                model: scope.popups
+                model: popupModel
 
                 delegate: Rectangle {
                     id: card
-                    required property var modelData
-                    required property int index
+                    required property int pid
+                    // resolved once at creation, so the card stays bound to its
+                    // own notification as rows come and go around it
+                    readonly property var notif: scope.noteFor(pid)
                     readonly property var chrome: scope.chrome
-                    readonly property int urgency: modelData.urgency
+                    readonly property int urgency: notif.urgency
                     // synthetic notes (captive portal) can pin themselves open
                     readonly property bool sticky: urgency === NotificationUrgency.Critical
-                                                || modelData.sticky === true
+                                                || notif.sticky === true
                     readonly property bool hovered: cardHover.containsMouse
                     readonly property color accentCol:
                         urgency === NotificationUrgency.Critical ? Theme.danger
@@ -501,7 +532,7 @@ Scope {
                         interval: card.urgency === NotificationUrgency.Low ? 1800 : 2200
                         running: !card.sticky && !cardHover.containsMouse
                         repeat: false
-                        onTriggered: scope.removeAt(card.index)
+                        onTriggered: scope.removeId(card.pid)
                     }
 
                     MouseArea {
@@ -538,7 +569,7 @@ Scope {
                                     // local sources only — a remote appIcon URL would
                                     // fire a request just by the card rendering
                                     source: {
-                                        const ai = card.modelData.appIcon || ""
+                                        const ai = card.notif.appIcon || ""
                                         if (!ai || /^(https?|ftp):/i.test(ai)) return ""
                                         return ai.includes("/") ? ai : Quickshell.iconPath(ai, true)
                                     }
@@ -546,7 +577,7 @@ Scope {
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: (card.modelData.appName || "Notification").toUpperCase()
+                                    text: (card.notif.appName || "Notification").toUpperCase()
                                     textFormat: Text.PlainText
                                     color: card.accentCol
                                     font.family: Theme.cyber ? Theme.mono : "Noto Sans"
@@ -571,14 +602,14 @@ Scope {
                                     anchors.margins: -6
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: scope.removeAt(card.index)
+                                    onClicked: scope.removeId(card.pid)
                                 }
                             }
                         }
 
                         Text {
                             width: parent.width
-                            text: card.modelData.summary
+                            text: card.notif.summary
                             textFormat: Text.PlainText
                             color: Theme.textBright
                             font.family: Theme.cyber ? Theme.mono : "Noto Sans"
@@ -593,7 +624,7 @@ Scope {
                             visible: text.length > 0
                             // keep body markup (links, bold) but drop <img> —
                             // StyledText would happily fetch a remote src
-                            text: (card.modelData.body || "").replace(/<img[^>]*>/gi, "")
+                            text: (card.notif.body || "").replace(/<img[^>]*>/gi, "")
                             textFormat: Text.StyledText
                             color: Theme.textMuted
                             font.family: Theme.cyber ? Theme.mono : "Noto Sans"
@@ -608,11 +639,11 @@ Scope {
                         Row {
                             width: parent.width
                             spacing: 6
-                            visible: card.modelData.actions.length > 0
+                            visible: card.notif.actions.length > 0
                             topPadding: 2
 
                             Repeater {
-                                model: card.modelData.actions
+                                model: card.notif.actions
 
                                 delegate: Rectangle {
                                     required property var modelData
@@ -639,7 +670,7 @@ Scope {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             parent.modelData.invoke()
-                                            scope.removeAt(card.index)
+                                            scope.removeId(card.pid)
                                         }
                                     }
                                 }
