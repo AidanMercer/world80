@@ -96,6 +96,7 @@ Item {
             // Top-right: live CPU / RAM / GPU usage.
             ResourceBubble {
                 id: resourceBubble
+                occluded: root.barWindow.occluded === true
                 anchors.horizontalCenter: rightBubble.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
             }

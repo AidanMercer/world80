@@ -37,11 +37,24 @@ Item {
     // reliably receives events on the bar's layer-shell surface.
     property alias hovered: hoverArea.containsMouse
 
+    // Bound from the bar: lock engaged, or a fullscreen window on this monitor is
+    // covering us. Nothing to read for, so the pollers park.
+    property bool occluded: false
+
     // CPU% needs two samples, so we keep the previous /proc/stat totals and diff.
     property real prevTotal: 0
     property real prevIdle: 0
 
     readonly property int pollInterval: 2000
+
+    // Desktops have no BAT* node, so the probe comes back empty forever — back off
+    // to an occasional retry instead of forking every tick. Not a permanent latch:
+    // this install is portable (desktop and laptop), and the node can also be
+    // unreadable for the first tick or two after boot / after a resume.
+    property int batMisses: 0
+    property int ticks: 0
+    readonly property int batRetries: 5     // full-rate probes before backing off
+    readonly property int batIdleTicks: 150 // then ~every 5 min
 
     function pct(v) { return v < 0 ? "—" : v + "%" }
 
@@ -67,14 +80,17 @@ Item {
     // ── one tick drives all reads ──
     Timer {
         interval: root.pollInterval
-        running: !ControlBus.sessionLocked
+        running: !root.occluded && !ControlBus.sessionLocked
         repeat: true
         triggeredOnStart: true
         onTriggered: {
+            root.ticks++
             cpuProc.running = true
             ramProc.running = true
             loadProc.running = true
-            batProc.running = true
+            if (root.hasBattery || root.batMisses < root.batRetries
+                || root.ticks % root.batIdleTicks === 0)
+                batProc.running = true
         }
     }
 
@@ -150,7 +166,12 @@ Item {
     function parseBattery(raw) {
         const lines = raw.trim().split("\n")
         const cap = parseInt(lines[0])
-        if (lines[0] === "" || isNaN(cap)) { root.hasBattery = false; return }
+        if (lines[0] === "" || isNaN(cap)) {
+            root.hasBattery = false
+            root.batMisses++
+            return
+        }
+        root.batMisses = 0
         root.hasBattery = true
         root.batteryPercent = cap
         root.batteryCharging = (lines[1] || "").trim() === "Charging"

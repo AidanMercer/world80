@@ -25,14 +25,35 @@ PanelWindow {
     color: "transparent"
     visible: open || exitTrans.running
 
-    // text and images are separate offer types, so two watchers
+    // text and images are separate offer types, so two watchers. Either can die —
+    // or start before the seat is up — and history then stops recording that type
+    // silently while the popup still lists the old entries, so restart them.
     Process {
+        id: textWatcher
         running: true
+        property double startedAt: 0
         command: ["wl-paste", "--type", "text", "--watch", "cliphist", "store"]
+        onRunningChanged: if (running) startedAt = Date.now()
+        onExited: root.rearm(textWatcher, textRetry)
     }
+    Timer { id: textRetry; interval: 1000; onTriggered: textWatcher.running = true }
+
     Process {
+        id: imageWatcher
         running: true
+        property double startedAt: 0
         command: ["wl-paste", "--type", "image", "--watch", "cliphist", "store"]
+        onRunningChanged: if (running) startedAt = Date.now()
+        onExited: root.rearm(imageWatcher, imageRetry)
+    }
+    Timer { id: imageRetry; interval: 1000; onTriggered: imageWatcher.running = true }
+
+    // back off up to a minute so a watcher that can't run doesn't spin; one that
+    // stayed up a while earns the short retry back
+    function rearm(proc, timer) {
+        const lived = Date.now() - proc.startedAt
+        timer.interval = lived > 30000 ? 1000 : Math.min(timer.interval * 2, 60000)
+        timer.start()
     }
 
     property string query: ""
@@ -114,8 +135,10 @@ PanelWindow {
         thumbProc.running = true
     }
     function thumbSrc(id, nonce) {
-        // nonce keeps the binding re-evaluating until the decode pass lands
-        return "file://" + thumbDir + "/" + id
+        // the nonce has to land in the URL itself — an identical source string is
+        // a no-op to Qt's image loader, so a thumb decoded after the row appeared
+        // would never show. Qt strips the query when it opens the local file.
+        return "file://" + thumbDir + "/" + id + "?v=" + nonce
     }
 
     function openMenu() {
