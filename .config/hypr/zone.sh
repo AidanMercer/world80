@@ -62,7 +62,6 @@ fi
 zone=$(jq -r '.zone' "$STATE")
 left=$(jq -r '.left' "$STATE")
 right=$(jq -r '.right' "$STATE")
-spaces=$(jq -r '.spaces' "$STATE")
 rws="special:sp$right"
 
 # rewrite one field in place — see the note in split-mode.sh about the inode
@@ -193,8 +192,12 @@ move)
 
 space)
 	[ "$arg" -ge 1 ] 2>/dev/null || exit 0
-	if [ "$zone" = r ]; then
-		[ "$arg" -le "$spaces" ] || exit 0
+	# an explicit half lets the per-half bars switch the one they belong to
+	# rather than whichever happens to hold focus
+	target=$zone
+	case "$extra" in l | r) target=$extra ;; esac
+
+	if [ "$target" = r ]; then
 		if [ "$arg" != "$right" ]; then
 			hyprctl dispatch togglespecialworkspace "sp$arg" >/dev/null
 			right=$arg
@@ -208,15 +211,20 @@ space)
 		poke ".left = $arg"
 		land "$arg"
 	fi
-	aim "$zone" "$left" "$right"
-	warp "$(half_centre "$zone")"
+	enter "$target"
+	warp "$(half_centre "$target")"
 	;;
 
 step)
 	d=1
 	[[ "$arg" == -* ]] && d=-1
 	if [ "$zone" = r ]; then
-		n=$(((right - 1 + d + spaces) % spaces + 1))
+		# same shape as the left half's stack: keeps counting up, stops dead at 1.
+		# bailing when it wouldn't move matters — togglespecialworkspace on the
+		# space that's already up closes the right half instead of staying put.
+		n=$((right + d))
+		[ "$n" -lt 1 ] && n=1
+		[ "$n" = "$right" ] && exit 0
 		if [ "$extra" = move ]; then
 			a=$(hyprctl activewindow -j | jq -r '.address // empty')
 			[ -n "$a" ] && hyprctl dispatch movetoworkspacesilent "special:sp$n,address:$a" >/dev/null

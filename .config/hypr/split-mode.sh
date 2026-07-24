@@ -59,11 +59,12 @@ apply_rules() { # ratio
 	batch+=" ; keyword misc:close_special_on_empty 0"
 	batch+=" ; keyword binds:hide_special_on_workspace_change 0"
 	batch+=" ; keyword decoration:dim_special 0"
-	# a half changing space is a local thing — sliding the whole panel for it
-	# (and the special's slide on top of that) just reads as noise
-	batch+=" ; keyword animation workspaces,0"
-	batch+=" ; keyword animation specialWorkspace,0"
 	batch+=" ; keyword workspace r[1-99],gapsout:10 $((lw - seam + half)) 28 28"
+	# s[true] = every special workspace, so stepping past sp5 keeps landing in the
+	# right half instead of falling out to full width. The numbered rules are
+	# redundant but keep any already-registered ones in sync — a stale one with an
+	# old seam would otherwise be free to win over the catch-all.
+	batch+=" ; keyword workspace s[true],gapsout:10 28 28 $((seam + half))"
 	for i in $(seq 1 "$SPACES"); do
 		batch+=" ; keyword workspace special:sp$i,gapsout:10 28 28 $((seam + half))"
 	done
@@ -168,9 +169,13 @@ reapply() {
 	local right seam
 	case "$(st .mode off)" in
 	split)
-		right=$(st .right 1)
+		# whatever the right half is actually showing wins over the state file —
+		# reapplying must never yank the space you're looking at
+		cur=$(focused_mon | jq -r '.specialWorkspace.name')
+		right=${cur#special:sp}
+		case "$right" in '' | *[!0-9]*) right=$(st .right 1) ;; esac
 		seam=$(apply_rules "$(st .ratio 0.5)")
-		if [ "$(focused_mon | jq -r '.specialWorkspace.name')" != "special:sp$right" ]; then
+		if [ -z "$cur" ]; then
 			hyprctl dispatch togglespecialworkspace "sp$right" >/dev/null
 		fi
 		save 1 "$(st .ratio 0.5)" "$(st .zone l)" "$(st .left 1)" "$right" "$seam" "$(focused_mon | jq -r .name)" split
