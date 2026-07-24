@@ -7,4 +7,5 @@ singleton ThemeSettings 1.0 ThemeSettings.qml
 singleton OverviewSettings 1.0 OverviewSettings.qml
 singleton UiScale 1.0 UiScale.qml
 singleton Volume 1.0 Volume.qml
+singleton SplitBus 1.0 SplitBus.qml
 ThemePalette ThemePalette.qml

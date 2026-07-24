@@ -14,6 +14,7 @@ import "modules/themelyrics"
 import "modules/themeparticles"
 import "modules/themeswitcher"
 import "modules/workspaceoverview"
+import "modules/split"
 import "modules/shortcuts"
 import "modules/osd"
 import "modules/lock"
@@ -90,6 +91,13 @@ ShellRoot {
         ThemeParticles {}
     }
 
+    // Split mode's readout: seam + a space pill per half. Only draws on the
+    // monitor that's actually split (see hypr/split-mode.sh).
+    Variants {
+        model: Quickshell.screens
+        SplitHud {}
+    }
+
     // Per-screen "identify" badge: a big white card naming the physical display
     // while you drag its box in the Display tab. One overlay per monitor.
     Variants {
@@ -137,6 +145,23 @@ ShellRoot {
     IpcHandler {
         target: "controlPopup"
         function toggle(): void { ControlBus.toggleFocused() }
+        function tab(delta: int): void { ControlBus.navTab(delta) }
+    }
+
+    // Split mode (Super+D). The hyprland side lives in a script — this is here so
+    // the command palette and the cheat sheet can drive it like any other panel.
+    IpcHandler {
+        target: "split"
+        function toggle(): void { SplitBus.toggle() }
+        function on(): void { SplitBus.set(true) }
+        function off(): void { SplitBus.set(false) }
+        function wider(): void { SplitBus.nudgeRatio(1) }
+        function narrower(): void { SplitBus.nudgeRatio(-1) }
+        function status(): string {
+            return SplitBus.on
+                ? `on  seam=${SplitBus.seam}  zone=${SplitBus.zone}  left=${SplitBus.left}  right=${SplitBus.right}`
+                : "off"
+        }
     }
 
     // Live lyric-sync calibration. The desktop lyric visualizer renders per-monitor

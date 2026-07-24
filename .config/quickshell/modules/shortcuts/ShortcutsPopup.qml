@@ -201,7 +201,8 @@ PanelWindow {
                 { keys: ["Super", "Shift", "S"], desc: "Screenshot region" },
                 { keys: ["Super", "/"],          desc: "This sheet" },
                 { keys: ["Super", "Shift", "/"], desc: "Settings" },
-                { keys: ["Super", "."],          desc: "Pin system info" }
+                { keys: ["Super", "."],          desc: "Pin system info" },
+                { keys: ["Super", "D"],          desc: "Split screen in two" }
             ]},
             { title: "Lyrics", binds: [
                 { keys: ["Super", "]"],          desc: "Sync later" },
@@ -217,14 +218,15 @@ PanelWindow {
                 { keys: ["Super", "Shift", "F"],     desc: "Fullscreen" },
                 { keys: ["Super", "Drag"],           desc: "Move window" },
                 { keys: ["Super", "Right-drag"],     desc: "Resize window" },
-                { keys: ["Super", "Shift", "← →"],   desc: "Send to monitor" },
+                { keys: ["Super", "Shift", "← →"],   desc: "Send to monitor / half" },
                 { keys: ["Super", "Shift", "↑ ↓"],   desc: "Move in layout" }
             ]},
             { title: "Workspaces", binds: [
                 { keys: ["Super", "1 – 5"],            desc: "Switch workspace" },
                 { keys: ["Super", "Scroll"],          desc: "Cycle this monitor" },
                 { keys: ["Super", "Ctrl", "← →"],     desc: "Prev / next" },
-                { keys: ["Super", "Ctrl", "Shift", "← →"], desc: "Carry window" }
+                { keys: ["Super", "Ctrl", "Shift", "← →"], desc: "Carry window" },
+                { keys: ["Super", "Alt", "← →"],      desc: "Move split seam" }
             ]}
         ]
         ]
