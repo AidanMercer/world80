@@ -116,9 +116,39 @@ half_centre() { # l|r -> "x y"
 	fi
 }
 
+# put the pointer in a half. an empty half has nothing to take focus, so
+# hyprland leaves it on the window we came from — checking the side means we
+# snap into the empty half instead of springing back to where we started.
+warp_half() { # l|r
+	local w cx cy seam
+	seam=$(jq -r '.seam' "$STATE")
+	w=$(hyprctl activewindow -j)
+	cx=$(jq -r 'if .at then (.at[0] + .size[0] / 2 | round) else empty end' <<<"$w")
+	cy=$(jq -r 'if .at then (.at[1] + .size[1] / 2 | round) else empty end' <<<"$w")
+	if [ -n "$cx" ] && [ -n "$cy" ]; then
+		if { [ "$1" = r ] && [ "$cx" -gt "$seam" ]; } ||
+			{ [ "$1" = l ] && [ "$cx" -lt "$seam" ]; }; then
+			hyprctl dispatch movecursor "$cx $cy" >/dev/null
+			return
+		fi
+	fi
+	hyprctl dispatch movecursor "$(half_centre "$1")" >/dev/null
+}
+
 # which half holds the focused window, or "" if focus got stranded on a
 # workspace that isn't on screen
 half_of() { # workspace name of the focused window
+	# an empty half can't hold focus — hyprland leaves it on a window in the other
+	# one — so when the state says we're standing in a half that has nothing in it,
+	# believe the state instead of the focused window
+	local n ws
+	if [ "$zone" = r ]; then ws="$rws"; else ws="$(lws)"; fi
+	n=$(hyprctl clients -j | jq --arg ws "$ws" '[.[] | select(.workspace.name == $ws)] | length')
+	if [ "${n:-0}" -eq 0 ]; then
+		echo "$zone"
+		return
+	fi
+
 	if [ "$1" = "$rws" ]; then
 		echo r
 	elif [ -n "$1" ] && [ "$1" = "$(lws)" ]; then
@@ -142,11 +172,17 @@ focus)
 	aws=$(jq -r '.workspace.name // empty' <<<"$act")
 	here=$(half_of "$aws")
 
-	if [ -z "$here" ]; then
-		# nothing focused on screen — just land in the half being asked for
-		if [ "$arg" = r ]; then land "$rws"; else land "$(lws)"; fi
-		enter "$arg"
-		warp "$(half_centre "$arg")"
+	if [ "$here" = r ]; then hereWs="$rws"; else hereWs="$(lws)"; fi
+
+	# focus is either stranded off screen, or we're standing in an empty half and
+	# the focused window is over in the other one. either way there's nothing
+	# beside us to step to, so the only move available is across the seam.
+	if [ -z "$here" ] || [ "$aws" != "$hereWs" ]; then
+		if [ "$arg" != "$here" ]; then
+			if [ "$arg" = r ]; then land "$rws"; else land "$(lws)"; fi
+			enter "$arg"
+			warp_half "$arg"
+		fi
 		exit 0
 	fi
 
@@ -165,7 +201,7 @@ focus)
 	elif [ "$arg" != "$here" ]; then
 		if [ "$arg" = r ]; then land "$rws"; else land "$(lws)"; fi
 		enter "$arg"
-		warp "$(half_centre "$arg")"
+		warp_half "$arg"
 	fi
 	;;
 
@@ -215,7 +251,7 @@ space)
 		land "$arg"
 	fi
 	enter "$target"
-	warp "$(half_centre "$target")"
+	warp_half "$target"
 	;;
 
 step)
@@ -244,7 +280,7 @@ step)
 		land "$left"
 	fi
 	aim "$zone" "$left" "$right"
-	warp "$(half_centre "$zone")"
+	warp_half "$zone"
 	;;
 
 fullscreen)
