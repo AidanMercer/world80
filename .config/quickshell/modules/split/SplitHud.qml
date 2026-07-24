@@ -4,10 +4,10 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import "../common"
 
-// The only thing split mode draws: a hairline down the seam and one small pill
-// per half showing that half's spaces, so a single panel reads as two screens.
-// One instance per monitor (Variants in shell.qml), but only the split monitor
-// ever shows anything. Fully click-through — it's a readout, not a control.
+// The only thing split mode draws: a hairline down the seam, so a single panel
+// reads as two screens. Which space each half is on is the bar's job — the theme
+// decks say it already. One instance per monitor (Variants in shell.qml), but
+// only the split monitor ever shows anything. Fully click-through.
 PanelWindow {
     id: hud
     required property var modelData
@@ -54,46 +54,5 @@ PanelWindow {
             GradientStop { position: 1.00; color: "transparent" }
         }
         Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-    }
-
-    Repeater {
-        model: [
-            { side: "l", centre: SplitBus.seam / 2, cur: SplitBus.left },
-            { side: "r", centre: SplitBus.seam + (hud.width - SplitBus.seam) / 2, cur: SplitBus.right }
-        ]
-
-        delegate: Rectangle {
-            id: pill
-            required property var modelData
-            readonly property bool focused: SplitBus.zone === modelData.side
-
-            x: Math.round(modelData.centre - width / 2)
-            y: Theme.barHeight + 12
-            width: 26
-            height: 24
-            radius: 12
-
-            color: Qt.rgba(ThemeConfig.glass.r, ThemeConfig.glass.g, ThemeConfig.glass.b, pill.focused ? 0.82 : 0.72)
-            border.width: 1
-            border.color: pill.focused
-                ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.55)
-                : Theme.glassBorder
-            opacity: pill.focused ? 1.0 : 0.8
-
-            Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
-            Behavior on border.color { ColorAnimation { duration: 160 } }
-
-            Text {
-                anchors.centerIn: parent
-                text: String(pill.modelData.cur)
-                font.pixelSize: 12
-                font.family: Theme.mono
-                font.weight: Font.Bold
-                color: pill.focused ? Theme.accent : Theme.textSecondary
-
-                Behavior on color { ColorAnimation { duration: 160 } }
-            }
-        }
     }
 }
