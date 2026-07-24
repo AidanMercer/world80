@@ -202,7 +202,8 @@ PanelWindow {
                 { keys: ["Super", "/"],          desc: "This sheet" },
                 { keys: ["Super", "Shift", "/"], desc: "Settings" },
                 { keys: ["Super", "."],          desc: "Pin system info" },
-                { keys: ["Super", "D"],          desc: "Split screen in two" }
+                { keys: ["Super", "D"],          desc: "Split screen in two" },
+                { keys: ["Super", "Shift", "D"], desc: "Centre stage layout" }
             ]},
             { title: "Lyrics", binds: [
                 { keys: ["Super", "]"],          desc: "Sync later" },

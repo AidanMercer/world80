@@ -19,11 +19,13 @@ QtObject {
     property int right: 1         // special:spN showing in the right half
     property int spaces: 5
     property string monitor: ""   // only this screen is split
+    property string mode: "off"   // off | split | center
 
     readonly property string _dir: Quickshell.env("HOME") + "/dotfiles/.config/hypr"
 
     function toggle() { Quickshell.execDetached([bus._dir + "/split-mode.sh", "toggle"]) }
     function set(v) { Quickshell.execDetached([bus._dir + "/split-mode.sh", v ? "on" : "off"]) }
+    function centre() { Quickshell.execDetached([bus._dir + "/split-mode.sh", "center"]) }
     function nudgeRatio(d) { Quickshell.execDetached([bus._dir + "/split-mode.sh", "ratio", d > 0 ? "+" : "-"]) }
 
     function _parse(t) {
@@ -37,8 +39,10 @@ QtObject {
             bus.right = s.right ?? 1
             bus.spaces = s.spaces ?? 5
             bus.monitor = s.monitor ?? ""
+            bus.mode = s.mode ?? (s.on ? "split" : "off")
         } catch (e) {
             bus.on = false
+            bus.mode = "off"
         }
     }
 

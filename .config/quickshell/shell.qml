@@ -155,12 +155,13 @@ ShellRoot {
         function toggle(): void { SplitBus.toggle() }
         function on(): void { SplitBus.set(true) }
         function off(): void { SplitBus.set(false) }
+        function centre(): void { SplitBus.centre() }
         function wider(): void { SplitBus.nudgeRatio(1) }
         function narrower(): void { SplitBus.nudgeRatio(-1) }
         function status(): string {
             return SplitBus.on
-                ? `on  seam=${SplitBus.seam}  zone=${SplitBus.zone}  left=${SplitBus.left}  right=${SplitBus.right}`
-                : "off"
+                ? `split  seam=${SplitBus.seam}  zone=${SplitBus.zone}  left=${SplitBus.left}  right=${SplitBus.right}`
+                : SplitBus.mode
         }
     }
 

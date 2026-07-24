@@ -25,9 +25,27 @@ extra=${3:-}
 on=0
 [ -s "$STATE" ] && on=$(jq -r '.on // 0' "$STATE" 2>/dev/null || echo 0)
 
+# Carry the pointer to whatever just took focus. Window borders are off and the
+# opacity difference between active and inactive is slight, so without this
+# there's nothing telling you which zone your next keystroke lands in.
+warp() { # optional "x y" fallback for when the target is empty
+	local w cx cy
+	w=$(hyprctl activewindow -j)
+	cx=$(jq -r 'if .at then (.at[0] + .size[0] / 2 | round) else empty end' <<<"$w")
+	cy=$(jq -r 'if .at then (.at[1] + .size[1] / 2 | round) else empty end' <<<"$w")
+	if [ -n "$cx" ] && [ -n "$cy" ]; then
+		hyprctl dispatch movecursor "$cx $cy" >/dev/null
+	elif [ -n "${1:-}" ]; then
+		hyprctl dispatch movecursor "$1" >/dev/null
+	fi
+}
+
 if [ "$on" != 1 ]; then
 	case "$cmd" in
-	focus) hyprctl dispatch movefocus "$arg" >/dev/null ;;
+	focus)
+		hyprctl dispatch movefocus "$arg" >/dev/null
+		warp
+		;;
 	move)
 		case "$arg" in
 		l | r) hyprctl dispatch movewindow "mon:$arg" >/dev/null ;;
@@ -82,6 +100,20 @@ land() { # workspace name
 # the state file only remembers it
 lws() { hyprctl monitors -j | jq -r '.[] | select(.focused) | .activeWorkspace.name'; }
 
+# middle of a half, for warping into one that has no windows to aim at
+half_centre() { # l|r -> "x y"
+	local m lw lh seam
+	m=$(hyprctl monitors -j | jq -c '.[] | select(.focused)')
+	lw=$(jq -r '(.width / .scale) | round' <<<"$m")
+	lh=$(jq -r '(.height / .scale) | round' <<<"$m")
+	seam=$(jq -r '.seam' "$STATE")
+	if [ "$1" = r ]; then
+		echo "$((seam + (lw - seam) / 2)) $((lh / 2))"
+	else
+		echo "$((seam / 2)) $((lh / 2))"
+	fi
+}
+
 # which half holds the focused window, or "" if focus got stranded on a
 # workspace that isn't on screen
 half_of() { # workspace name of the focused window
@@ -99,6 +131,7 @@ focus)
 	case "$arg" in
 	u | d)
 		hyprctl dispatch movefocus "$arg" >/dev/null
+		warp
 		exit 0
 		;;
 	esac
@@ -111,6 +144,7 @@ focus)
 		# nothing focused on screen — just land in the half being asked for
 		if [ "$arg" = r ]; then land "$rws"; else land "$(lws)"; fi
 		enter "$arg"
+		warp "$(half_centre "$arg")"
 		exit 0
 	fi
 
@@ -125,9 +159,11 @@ focus)
 
 	if [ "${n:-0}" -gt 0 ]; then
 		hyprctl dispatch movefocus "$arg" >/dev/null
+		warp
 	elif [ "$arg" != "$here" ]; then
 		if [ "$arg" = r ]; then land "$rws"; else land "$(lws)"; fi
 		enter "$arg"
+		warp "$(half_centre "$arg")"
 	fi
 	;;
 
@@ -152,6 +188,7 @@ move)
 		hyprctl dispatch focuswindow "address:$a" >/dev/null
 		enter "$arg"
 	fi
+	warp
 	;;
 
 space)
@@ -172,6 +209,7 @@ space)
 		land "$arg"
 	fi
 	aim "$zone" "$left" "$right"
+	warp "$(half_centre "$zone")"
 	;;
 
 step)
@@ -195,6 +233,7 @@ step)
 		land "$left"
 	fi
 	aim "$zone" "$left" "$right"
+	warp "$(half_centre "$zone")"
 	;;
 
 fullscreen)

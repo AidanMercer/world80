@@ -70,6 +70,7 @@ PanelWindow {
         a.push({ title: "Toggle do not disturb", cat: "Toggle",  run: () => root.ipc("notifs", "dnd") })
         a.push({ title: "Pin system info",       cat: "Toggle",  run: () => root.ipc("sysinfo", "toggle") })
         a.push({ title: "Toggle split screen",   cat: "Toggle",  run: () => root.ipc("split", "toggle") })
+        a.push({ title: "Toggle centre stage",   cat: "Toggle",  run: () => root.ipc("split", "centre") })
         a.push({ title: "Split seam: left",      cat: "Toggle",  run: () => root.ipc("split", "narrower") })
         a.push({ title: "Split seam: right",     cat: "Toggle",  run: () => root.ipc("split", "wider") })
         a.push({ title: "Interface scale: reset",   cat: "Scale", run: () => root.ipc("uiScale", "reset") })

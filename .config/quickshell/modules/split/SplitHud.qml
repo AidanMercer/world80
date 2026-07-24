@@ -13,7 +13,9 @@ PanelWindow {
     required property var modelData
     screen: modelData
 
-    readonly property bool mine: SplitBus.on && screen && screen.name === SplitBus.monitor
+    // keyed off modelData, not screen: PanelWindow re-evaluates `screen` when
+    // visibility changes, and reading it here loops back through `visible`
+    readonly property bool mine: SplitBus.on && modelData && modelData.name === SplitBus.monitor
 
     // don't float over a fullscreen window
     readonly property bool covered: {
@@ -41,16 +43,6 @@ PanelWindow {
 
     readonly property color seamColor: Qt.rgba(Theme.textBright.r, Theme.textBright.g, Theme.textBright.b, 0.16)
 
-    // 1..spaces, plus the current one when the half has been scrolled past them
-    function slots(cur) {
-        const a = []
-        for (let i = 1; i <= SplitBus.spaces; i++)
-            a.push(i)
-        if (cur > 0 && a.indexOf(cur) < 0)
-            a.push(cur)
-        return a
-    }
-
     Rectangle {
         x: Math.round(SplitBus.seam) - 1
         width: 2
@@ -77,7 +69,7 @@ PanelWindow {
 
             x: Math.round(modelData.centre - width / 2)
             y: Theme.barHeight + 12
-            width: row.width + 20
+            width: 26
             height: 24
             radius: 12
 
@@ -92,29 +84,15 @@ PanelWindow {
             Behavior on opacity { NumberAnimation { duration: 160 } }
             Behavior on border.color { ColorAnimation { duration: 160 } }
 
-            Row {
-                id: row
+            Text {
                 anchors.centerIn: parent
-                spacing: 9
+                text: String(pill.modelData.cur)
+                font.pixelSize: 12
+                font.family: Theme.mono
+                font.weight: Font.Bold
+                color: pill.focused ? Theme.accent : Theme.textSecondary
 
-                Repeater {
-                    model: hud.slots(pill.modelData.cur)
-
-                    delegate: Text {
-                        required property int modelData
-                        readonly property bool active: modelData === pill.modelData.cur
-
-                        text: String(modelData)
-                        font.pixelSize: 11
-                        font.family: Theme.mono
-                        font.weight: active ? Font.Bold : Font.Normal
-                        color: active ? Theme.accent : Theme.textMuted
-                        opacity: active ? 1.0 : 0.75
-
-                        Behavior on color { ColorAnimation { duration: 160 } }
-                        Behavior on opacity { NumberAnimation { duration: 160 } }
-                    }
-                }
+                Behavior on color { ColorAnimation { duration: 160 } }
             }
         }
     }
