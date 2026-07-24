@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 
 // Split mode: one wide monitor cut into two halves that act like two monitors.
 // hypr/split-mode.sh owns the hyprland side and mirrors what it did into a
@@ -48,6 +49,25 @@ QtObject {
         bus.spaces = s.spaces ?? 5
         bus.monitor = s.monitor ?? ""
         bus.mode = s.mode ?? (s.on ? "split" : "off")
+    }
+
+    // While a special workspace is open, hyprland won't drop focus onto an empty
+    // regular workspace — it leaves it on whatever you were last in. Step the left
+    // half to an empty space and focus is still back on the old one, so the first
+    // window you open there doesn't take focus and the view snaps back to where
+    // focus actually is. Hand the new window the focus it should have had.
+    property Connections _hypr: Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (!bus.on || event.name !== "openwindow")
+                return
+            const parts = String(event.data).split(",")
+            if (parts.length < 2)
+                return
+            const here = bus.zone === "r" ? "special:sp" + bus.right : String(bus.left)
+            if (parts[1] === here)
+                Hyprland.dispatch("focuswindow address:0x" + parts[0])
+        }
     }
 
     property FileView _file: FileView {

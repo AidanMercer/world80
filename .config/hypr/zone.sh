@@ -73,15 +73,19 @@ poke() {
 	printf '%s\n' "$j" >"$STATE"
 }
 
-aim() { # zone leftws rightIdx — where the next window should open
+# where the next window should open. the left target is read live rather than
+# passed in: a workspace captured right after a switch can still be the old one,
+# and this rule isn't silent, so a stale target drags the half back there the
+# moment you open anything.
+aim() { # zone rightIdx
 	local target
-	if [ "$1" = r ]; then target="special:sp$3"; else target="$2"; fi
+	if [ "$1" = r ]; then target="special:sp$2"; else target="$(lws)"; fi
 	hyprctl keyword windowrule "workspace $target, match:class .*" >/dev/null
 }
 
 enter() { # l|r — make that half the active one
 	poke ".zone = \"$1\""
-	aim "$1" "$left" "$right"
+	aim "$1" "$right"
 }
 
 # put focus in a workspace whether or not it has windows in it. switching a
@@ -279,7 +283,7 @@ step)
 		poke ".left = $left"
 		land "$left"
 	fi
-	aim "$zone" "$left" "$right"
+	aim "$zone" "$right"
 	warp_half "$zone"
 	;;
 
