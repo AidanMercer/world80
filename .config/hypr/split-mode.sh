@@ -31,11 +31,14 @@ st() {
 # truncate-in-place, never rename: the shell watches this path and a fresh inode
 # would drop its watch (same reason the awww cache files are rewritten in place)
 save() { # on ratio zone left right seam monitor mode
-	jq -nc --argjson on "$1" --argjson ratio "$2" --arg zone "$3" \
+	local j
+	j=$(jq -nc --argjson on "$1" --argjson ratio "$2" --arg zone "$3" \
 		--argjson left "$4" --argjson right "$5" --argjson seam "$6" \
 		--arg monitor "$7" --arg mode "$8" --argjson spaces "$SPACES" \
-		'{on:$on,ratio:$ratio,zone:$zone,left:$left,right:$right,seam:$seam,monitor:$monitor,mode:$mode,spaces:$spaces}' \
-		>"$STATE"
+		'{on:$on,ratio:$ratio,zone:$zone,left:$left,right:$right,seam:$seam,monitor:$monitor,mode:$mode,spaces:$spaces}')
+	# redirecting jq straight at the file leaves it empty for as long as jq runs,
+	# and the watchers read it in that gap — build the line first, write once
+	printf '%s\n' "$j" >"$STATE"
 }
 
 focused_mon() { hyprctl monitors -j | jq -c '.[] | select(.focused)'; }

@@ -28,22 +28,26 @@ QtObject {
     function centre() { Quickshell.execDetached([bus._dir + "/split-mode.sh", "center"]) }
     function nudgeRatio(d) { Quickshell.execDetached([bus._dir + "/split-mode.sh", "ratio", d > 0 ? "+" : "-"]) }
 
+    // the writers truncate before writing, so a read can land on an empty or
+    // half-written file. hold the last good values instead of reading that as
+    // "not split", which made the seam blink on every switch.
     function _parse(t) {
+        if (!t || !t.trim()) return
+        let s
         try {
-            const s = JSON.parse(t)
-            bus.on = !!s.on
-            bus.ratio = s.ratio ?? 0.5
-            bus.seam = s.seam ?? 0
-            bus.zone = s.zone ?? "l"
-            bus.left = s.left ?? 1
-            bus.right = s.right ?? 1
-            bus.spaces = s.spaces ?? 5
-            bus.monitor = s.monitor ?? ""
-            bus.mode = s.mode ?? (s.on ? "split" : "off")
+            s = JSON.parse(t)
         } catch (e) {
-            bus.on = false
-            bus.mode = "off"
+            return
         }
+        bus.on = !!s.on
+        bus.ratio = s.ratio ?? 0.5
+        bus.seam = s.seam ?? 0
+        bus.zone = s.zone ?? "l"
+        bus.left = s.left ?? 1
+        bus.right = s.right ?? 1
+        bus.spaces = s.spaces ?? 5
+        bus.monitor = s.monitor ?? ""
+        bus.mode = s.mode ?? (s.on ? "split" : "off")
     }
 
     property FileView _file: FileView {

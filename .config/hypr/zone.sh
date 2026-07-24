@@ -64,10 +64,13 @@ left=$(jq -r '.left' "$STATE")
 right=$(jq -r '.right' "$STATE")
 rws="special:sp$right"
 
-# rewrite one field in place — see the note in split-mode.sh about the inode
+# rewrite one field in place — see the note in split-mode.sh about the inode.
+# build the whole line first so the file is truncated and refilled in one go
+# rather than left empty while jq runs; readers watching it see less of a gap.
 poke() {
-	jq -c "$1" "$STATE" >"$STATE.tmp" && cat "$STATE.tmp" >"$STATE"
-	rm -f "$STATE.tmp"
+	local j
+	j=$(jq -c "$1" "$STATE") || return 0
+	printf '%s\n' "$j" >"$STATE"
 }
 
 aim() { # zone leftws rightIdx — where the next window should open
