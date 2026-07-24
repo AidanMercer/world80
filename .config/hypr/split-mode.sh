@@ -59,6 +59,13 @@ apply_rules() { # ratio
 	batch+=" ; keyword misc:close_special_on_empty 0"
 	batch+=" ; keyword binds:hide_special_on_workspace_change 0"
 	batch+=" ; keyword decoration:dim_special 0"
+	# `slide` picks its direction from workspace ordering, so the left half comes
+	# in from the left going back and the right going forward, while the right
+	# half — an overlay entering from off-screen — is always the same. There's no
+	# direction argument to pin, so the left half stops sliding while split and
+	# crossfades instead: consistent either way you step. Speed/bezier mirror the
+	# `animation = workspaces` line in hyprland.conf; reload puts it back.
+	batch+=" ; keyword animation workspaces,1,3.5,liquid,fade"
 	batch+=" ; keyword workspace r[1-99],gapsout:10 $((lw - seam + half)) 28 28"
 	# s[true] = every special workspace, so stepping past sp5 keeps landing in the
 	# right half instead of falling out to full width. The numbered rules are
