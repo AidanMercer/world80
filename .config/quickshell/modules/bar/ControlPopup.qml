@@ -92,6 +92,10 @@ PanelWindow {
     Connections {
         target: ControlBus
         function onThemeReloadRequested() { root.chromeNonce++; root.rescanChrome() }
+        function onTabNavRequested(delta) {
+            if (!root.open) return
+            root.currentTab = (root.currentTab + delta + root.tabs.length) % root.tabs.length
+        }
     }
     Component.onCompleted: rescanChrome()
 

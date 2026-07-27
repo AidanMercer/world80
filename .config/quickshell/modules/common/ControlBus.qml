@@ -65,4 +65,9 @@ QtObject {
 
     function identify(name) { identifyMonitor = name }
     function clearIdentify() { identifyMonitor = "" }
+
+    // Cycle the open popup's tab from outside its exclusive keyboard focus
+    // (command palette / headless driving — the demo reel flips through tabs).
+    signal tabNavRequested(int delta)
+    function navTab(delta) { tabNavRequested(delta) }
 }
