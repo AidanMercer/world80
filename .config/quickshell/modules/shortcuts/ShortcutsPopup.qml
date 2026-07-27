@@ -58,6 +58,30 @@ PanelWindow {
     property int mktRow: 0              // keyboard cursor within the store list
     property string mktArmedRemove: ""  // theme name whose removal is armed (confirm)
 
+    // ── panel fit ───────────────────────────────────────────────────────
+    // the catalog stamps each theme with the aspect ratios its wallpapers ship
+    // in (build-catalog.sh's aspect()); mirroring the same snapping here lets a
+    // row light up the tag that matches the monitor you're shopping on, so an
+    // ultrawide box can see at a glance which plates were cut for it.
+    readonly property var aspectTable: [
+        ["32:9", 32 / 9],   ["21:9", 21 / 9],  ["21:9", 64 / 27], ["21:9", 43 / 18],
+        ["16:9", 16 / 9],   ["16:10", 1.6],    ["3:2", 1.5],      ["4:3", 4 / 3],
+        ["5:4", 1.25],      ["1:1", 1],        ["4:5", 0.8],      ["3:4", 0.75],
+        ["2:3", 2 / 3],     ["10:16", 0.625],  ["9:16", 0.5625],  ["9:21", 9 / 21]
+    ]
+    function aspectLabel(w, h) {
+        if (!(w > 0) || !(h > 0)) return ""
+        const r = w / h
+        let best = "", bd = Infinity
+        for (const row of root.aspectTable) {
+            const e = Math.abs(r - row[1]) / row[1]
+            if (e < bd) { bd = e; best = row[0] }
+        }
+        return bd <= 0.025 ? best : ""     // genuinely odd panels match nothing
+    }
+    readonly property string screenAspect:
+        targetScreen ? aspectLabel(targetScreen.width, targetScreen.height) : ""
+
     // a store install remembers the theme's catalog rev in .mkt-version; when
     // the catalog moves past it, that's an update. themes without the stamp
     // (this machine's own git checkout, hand-made folders) never show one —
@@ -1719,7 +1743,8 @@ PanelWindow {
                             readonly property bool best: modelData.best === true
                             readonly property int mb: Math.max(1, Math.round((modelData.bytes || 0) / 1048576))
                             readonly property var tags: {
-                                const a = []
+                                // panel fit leads — on a 32:9 it's the first thing you check
+                                const a = (modelData.aspects || []).slice()
                                 if (modelData.video) a.push("motion")
                                 if (modelData.cyber) a.push("cyber")
                                 else if (modelData.light) a.push("light")
@@ -1830,13 +1855,21 @@ PanelWindow {
                                         model: mrow.tags
                                         delegate: Rectangle {
                                             required property var modelData
+                                            // the aspect tag that matches this monitor gets the accent
+                                            readonly property bool fits: root.screenAspect !== ""
+                                                                      && modelData === root.screenAspect
                                             height: 16; width: tagT.implicitWidth + 12; radius: 4
-                                            color: "transparent"
-                                            border.color: Theme.glassBorder; border.width: 1
+                                            color: fits ? Qt.rgba(Theme.accent.r, Theme.accent.g,
+                                                                  Theme.accent.b, 0.14)
+                                                        : "transparent"
+                                            border.color: fits ? Qt.rgba(Theme.accent.r, Theme.accent.g,
+                                                                         Theme.accent.b, 0.6)
+                                                               : Theme.glassBorder
+                                            border.width: 1
                                             Text {
                                                 id: tagT; anchors.centerIn: parent
                                                 text: modelData
-                                                color: Theme.textMuted
+                                                color: fits ? Theme.accent : Theme.textMuted
                                                 font.pixelSize: 10
                                                 font.letterSpacing: 0.5
                                             }
