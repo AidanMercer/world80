@@ -115,7 +115,10 @@ PanelWindow {
     Behavior on reveal {
         NumberAnimation {
             duration: root.open ? 300 : 200
-            easing.type: root.open ? Easing.OutBack : Easing.InCubic
+            // InOutQuad out: InCubic held the tiles at full size then snapped,
+            // OutCubic dumped them then trailed a faint smear for ~180ms. This
+            // one leaves evenly and is actually gone when it says it is.
+            easing.type: root.open ? Easing.OutBack : Easing.InOutQuad
         }
     }
 
@@ -403,14 +406,28 @@ PanelWindow {
                         id: thumb
                         anchors.centerIn: parent
                         captureSource: tile.win.wayland ?? null
-                        // only stream while the overview is actually up
                         live: root.open
-                        visible: hasContent
+                        property bool hadContent: false
+                        onHasContentChanged: if (hasContent) hadContent = true
+                        visible: hasContent && !root.closing
                         // letterbox to the window's real aspect instead of stretching
                         readonly property real ar: sourceSize.height > 0
                             ? sourceSize.width / sourceSize.height : 16 / 9
                         width: Math.min(parent.width, parent.height * ar)
                         height: Math.min(parent.height, parent.width / ar)
+                    }
+
+                    // the last captured frame, held. the screencopy goes empty the
+                    // instant the exposé closes no matter how `live` is gated, so
+                    // without this the tiles fade out as blank cards.
+                    ShaderEffectSource {
+                        anchors.centerIn: parent
+                        width: thumb.width
+                        height: thumb.height
+                        sourceItem: thumb
+                        live: root.open       // stops updating on close, keeps the texture
+                        hideSource: false
+                        visible: root.closing && thumb.hadContent
                     }
 
                     // until the first frame lands (and for anything that won't
@@ -420,7 +437,9 @@ PanelWindow {
                         width: tile.isCenter ? 56 : 40
                         height: width
                         source: root.iconForClass(tile.win.cls)
-                        visible: !thumb.hasContent
+                        // a tile that had a preview must not swap to the icon while
+                        // it's fading out — that swap is the visible glitch
+                        visible: !thumb.hasContent && !(root.closing && thumb.hadContent)
                     }
                 }
 
