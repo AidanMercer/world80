@@ -9,9 +9,11 @@
 #
 # usage: zone.sh focus l|r|u|d
 #        zone.sh move  l|r|u|d
-#        zone.sh space <n>
+#        zone.sh space <n> [l|r]
 #        zone.sh step  +1|-1 [move]
 #        zone.sh fullscreen
+#        zone.sh sync            adopt the half the pointer is in, nothing else
+#        zone.sh hover           print which half the pointer is in
 
 set -euo pipefail
 
@@ -162,7 +164,65 @@ half_of() { # workspace name of the focused window
 	fi
 }
 
+# which half the pointer is sitting in — the mouse picks the half the same way it
+# picks the monitor on a two-monitor desk
+hover_zone() { # -> l|r, or "" when the pointer isn't on the split monitor
+	local mon m pos px py mx my mw mh seam
+	mon=$(jq -r '.monitor // empty' "$STATE")
+	[ -n "$mon" ] || return 0
+	m=$(hyprctl monitors -j | jq -c --arg n "$mon" '.[] | select(.name == $n)')
+	[ -n "$m" ] || return 0
+
+	pos=$(hyprctl cursorpos -j)
+	px=$(jq -r '.x // empty' <<<"$pos")
+	py=$(jq -r '.y // empty' <<<"$pos")
+	case "$px$py" in '' | *[!0-9-]*) return 0 ;; esac
+
+	mx=$(jq -r '.x' <<<"$m")
+	my=$(jq -r '.y' <<<"$m")
+	mw=$(jq -r '(.width / .scale) | round' <<<"$m")
+	mh=$(jq -r '(.height / .scale) | round' <<<"$m")
+	if [ "$px" -lt "$mx" ] || [ "$px" -ge "$((mx + mw))" ] ||
+		[ "$py" -lt "$my" ] || [ "$py" -ge "$((my + mh))" ]; then
+		return 0
+	fi
+
+	seam=$(jq -r '.seam' "$STATE")
+	if [ "$((px - mx))" -ge "$seam" ]; then echo r; else echo l; fi
+}
+
+# Take the half the pointer is in before doing anything else. follow_mouse
+# already hands focus to a window under the cursor, but nothing moved the zone
+# with it — so hovering one half and pressing a key still acted on the half you
+# came from. An empty half doesn't even get the focus half of that, since there's
+# no window there to take it.
+#
+# No warp here on purpose: the pointer is already where it wants to be.
+sync_hover() {
+	local h
+	h=$(hover_zone)
+	[ -n "$h" ] || return 0
+	[ "$h" != "$zone" ] || return 0
+	zone=$h
+	if [ "$h" = r ]; then land "$rws"; else land "$(lws)"; fi
+	enter "$h"
+}
+
+if [ "$cmd" = hover ]; then
+	hover_zone
+	exit 0
+fi
+
+# move and fullscreen are about the focused window, not about a half — taking
+# focus into the hovered half first would act on the wrong window, or on nothing
+# when that half is empty
 case "$cmd" in
+focus | space | step | sync) sync_hover ;;
+esac
+
+case "$cmd" in
+sync) ;; # sync_hover above was the whole job
+
 focus)
 	case "$arg" in
 	u | d)

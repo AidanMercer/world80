@@ -9,16 +9,26 @@
 # yanked back. Moving the window to you is the two-monitor behaviour: the app
 # arrives on the screen you're looking at.
 #
+# Either way the half is the one the pointer is in, not the one that happens to
+# hold focus — same rule as the window keys.
+#
 # usage: app.sh <class> <command> [args...]
+#        app.sh -       <command> [args...]   launch here, never raise
 
 set -euo pipefail
 
 STATE="${XDG_RUNTIME_DIR:-/tmp}/world80-split"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 cls=${1:-}
 shift || true
+[ "$cls" = "-" ] && cls=""
 
 on=0
 [ -s "$STATE" ] && on=$(jq -r '.on // 0' "$STATE" 2>/dev/null || echo 0)
+
+# the pointer picks the half. this has to happen before the app starts: the
+# placement rule that catches new windows is aimed at whichever half is current.
+[ "$on" = 1 ] && { "$HERE/zone.sh" sync >/dev/null || true; }
 
 if [ "$on" = 1 ] && [ -n "$cls" ]; then
 	addr=$(hyprctl clients -j |
