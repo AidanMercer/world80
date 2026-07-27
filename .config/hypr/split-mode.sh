@@ -164,13 +164,15 @@ turn_off() {
 		[ -n "$cur" ] && hyprctl dispatch togglespecialworkspace "${cur#special:}" >/dev/null
 	fi
 
+	# this has to be written BEFORE the reload. reload re-runs hyprland.conf's
+	# `exec = split-mode.sh reapply`, and reapply reads this file to decide what
+	# to put back — save afterwards and turning split off just turns it on again.
+	save 0 "$(st .ratio 0.5)" l "$left" "$(st .right 1)" 0 "" off
+
 	# reload is the only way to drop the catch-all windowrule — there's no API to
 	# remove a single rule. monitors.conf/local.conf are sourced from hyprland.conf
-	# so the display layout and per-machine env survive it, and nothing here is
-	# `exec =` (only exec-once), so nothing gets relaunched.
+	# so the display layout and per-machine env survive it.
 	hyprctl reload >/dev/null
-
-	save 0 "$(st .ratio 0.5)" l "$left" "$(st .right 1)" 0 "" off
 }
 
 # put back whatever mode we're in after something wiped the runtime keywords
