@@ -135,9 +135,10 @@ PanelWindow {
     // the engine is a git clone at ~/dotfiles; check if it's behind the remote
     // and offer a ff-only pull. checked when the Settings tab opens.
     readonly property string updRepo: mktHome + "/dotfiles"
-    property string updState: "idle"    // idle|checking|uptodate|behind|offline|pulling|done|error
+    property string updState: "idle"    // idle|checking|uptodate|behind|offline|pulling|done|error|failed
     property int updBehind: 0
     property string updLocal: ""        // "abc1234 (3 days ago)"
+    property string updFailWhy: ""      // why the pull refused, in the banner
     property int updNotifiedBehind: 0   // how many commits we last notified about (no spam)
 
     // ── per-theme widget toggles ────────────────────────────────────────
@@ -758,7 +759,7 @@ PanelWindow {
                 // just when they have commits: their setup re-run is how
                 // desktop-entry/portal/dep fixes reach apps that are current
                 root.startExtUpdate()
-            } else if (line === "__fail__") root.updState = "error"
+            } else if (line.startsWith("__fail__")) root.pullFailed(line.slice(8).trim())
         } }
         onExited: (code, status) => updFail.restart()
     }
@@ -782,8 +783,27 @@ PanelWindow {
         interval: 200
         onTriggered: {
             if (root.updState === "pulling" && !updPullProc.running && !extUpdAllProc.running)
-                root.updState = "error"
+                root.pullFailed("other update stopped early")
         }
+    }
+    // the ff-only pull refuses on purpose when the clone has local work of its
+    // own. that used to land on the check-failed message, which sent you
+    // hunting a network problem — say which kind of local work blocked it.
+    function pullFailed(why) {
+        const p = (why || "").split(" ")
+        const rest = p.slice(1).join(" ")
+        switch (p[0]) {
+        case "nodir":    root.updFailWhy = "~/dotfiles isn't a git clone"; break
+        case "diverged": {
+            const n = parseInt(p[1]) || 1
+            root.updFailWhy = n === 1 ? "1 local commit isn't on origin — rebase or drop it"
+                                      : n + " local commits aren't on origin — rebase or drop them"
+            break
+        }
+        case "dirty":    root.updFailWhy = "local edits in ~/dotfiles — commit or stash first"; break
+        default:         root.updFailWhy = rest.length ? rest : "git pull failed — see ~/dotfiles"
+        }
+        root.updState = "failed"
     }
     function startExtUpdate() {
         if (extUpdAllProc.running) return
@@ -796,8 +816,14 @@ PanelWindow {
         if (root.updBehind === 0) { root.startExtUpdate(); return }   // apps-only update
         // ff-only so a diverged/locally-edited clone fails safe instead of merging
         updPullProc.command = ["bash", "-c",
-            'cd "$1" || { echo __fail__; exit 0; }; ' +
-            'if git pull --ff-only >/dev/null 2>&1; then echo __ok__; else echo __fail__; fi',
+            'cd "$1" 2>/dev/null || { echo "__fail__ nodir"; exit 0; }; ' +
+            'err="$(git pull --ff-only 2>&1)" && { echo __ok__; exit 0; }; ' +
+            'ahead="$(git rev-list --count @{u}..HEAD 2>/dev/null || echo 0)"; ' +
+            'if [ "$ahead" -gt 0 ]; then echo "__fail__ diverged $ahead"; exit 0; fi; ' +
+            'if ! git diff --quiet HEAD; then echo "__fail__ dirty"; exit 0; fi; ' +
+            'echo "__fail__ other $(printf %s "$err" | grep -m1 -iE "^(fatal|error):" ' +
+            '| sed -e "s/^[a-z]*: //" -e "s/^The following //" -e "s/:$//" ' +
+            '| cut -c1-80 | tr -d "\\n")"',
             "_", root.updRepo]
         updPullProc.running = true
     }
@@ -1213,6 +1239,7 @@ PanelWindow {
                                         case "pulling":  return "downloading updates…"
                                         case "done":     return "updated — press Super+Shift+R to restart the shell"
                                         case "offline":  return "offline · " + root.updLocal
+                                        case "failed":   return root.updFailWhy
                                         case "error":    return "couldn't check — needs a git clone + network"
                                         default:         return "up to date · " + root.updLocal
                                         }
@@ -1234,6 +1261,7 @@ PanelWindow {
                             readonly property bool isUpdate: root.updState === "behind"
                             visible: root.updState === "behind" || root.updState === "uptodate"
                                      || root.updState === "offline" || root.updState === "error"
+                                     || root.updState === "failed"
                             width: updBtnT.implicitWidth + 26
                             height: 30
                             radius: 8
