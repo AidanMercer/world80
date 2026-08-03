@@ -61,15 +61,32 @@ command -v git >/dev/null || { echo "git is required. sudo pacman -S git" >&2; e
 ok "Arch + git present, running as $USER"
 
 # ── the engine hardcodes ~/dotfiles; make that path resolve wherever we cloned ──
+# a dozen call sites reference ~/dotfiles by absolute path — hyprland's exec-once
+# lines and script binds, lock.sh, the theme switcher, the boot splash, the engine
+# self-update. qml can't resolve a path relative to the repo, so the clone has to
+# be reachable at ~/dotfiles no matter where it actually lives.
 say "Repo location"
-if [ "$REPO_DIR" = "$HOME/dotfiles" ]; then
-  ok "repo is at ~/dotfiles"
+# compare resolved paths: re-running from ~/world80 when ~/dotfiles already links
+# here is the normal case on a second run, not a conflict
+if [ "$(readlink -f "$HOME/dotfiles" 2>/dev/null)" = "$(readlink -f "$REPO_DIR")" ]; then
+  ok "~/dotfiles resolves to this repo"
 elif [ ! -e "$HOME/dotfiles" ]; then
   ln -s "$REPO_DIR" "$HOME/dotfiles"
   ok "symlinked ~/dotfiles -> $REPO_DIR (configs reference ~/dotfiles by path)"
 else
-  warn "~/dotfiles exists and isn't this repo. the configs hardcode ~/dotfiles —"
-  warn "move this clone to ~/dotfiles (or point ~/dotfiles at it) before using the rice."
+  # this used to warn and carry on, which was the worst outcome: the symlinks all
+  # land, the shell even starts, and then every script bind and the whole theme
+  # pipeline silently points into someone else's tree. stop instead.
+  warn "~/dotfiles already exists and isn't this repo."
+  warn "the configs hardcode that path, so the rice stays half-wired until it resolves here."
+  if ask "back up ~/dotfiles into $BACKUP_DIR and point it at this clone?"; then
+    mkdir -p "$BACKUP_DIR"; mv "$HOME/dotfiles" "$BACKUP_DIR/dotfiles"
+    ln -s "$REPO_DIR" "$HOME/dotfiles"
+    ok "old ~/dotfiles -> $BACKUP_DIR/dotfiles · ~/dotfiles -> $REPO_DIR"
+  else
+    warn "nothing changed. move this clone to ~/dotfiles or free that path, then re-run."
+    exit 1
+  fi
 fi
 
 # ── packages ─────────────────────────────────────────────────────────────
