@@ -20,11 +20,18 @@ Item {
     property var networks: []
     property var savedConns: []
 
-    // inline password entry: when pendingSsid is set the password field is
+    // inline credential entry: when pendingSsid is set the password field is
     // shown for that network (a new secured one we don't have saved yet).
+    // pendingEnterprise adds a username field above it — 802.1X networks
+    // (ubcsecure, eduroam, office wifi) authenticate a person, not a shared key.
     property string pendingSsid: ""
+    property bool pendingEnterprise: false
     property bool connecting: false
     property bool authFailed: false
+    property string failText: ""
+    // ssid of the connect attempt in flight, so a failed one-click connect to a
+    // saved enterprise profile can fall back to the credential prompt.
+    property string attemptSsid: ""
 
     // right-click context menu. menuSsid is the network whose menu is open
     // ("" = closed); menuX/Y are its top-left anchor in root coordinates. Lives
@@ -116,37 +123,87 @@ Item {
         return net && net.security && net.security !== "" && net.security !== "--"
     }
 
+    // nmcli reports WPA-Enterprise as e.g. "WPA2 802.1X"; those need an
+    // identity + password through a connection profile, not a wifi-sec psk.
+    function isEnterprise(net) {
+        return !!(net && net.security && net.security.indexOf("802.1X") >= 0)
+    }
+
     // open or already-saved networks connect on one click; a new secured one
-    // drops into the inline password field instead of failing silently.
+    // drops into the inline credential prompt instead of failing silently.
     function connectTo(ssid) {
         const net = networks.find(n => n.ssid === ssid)
-        if (isSecured(net) && savedConns.indexOf(ssid) < 0) {
-            pendingSsid = ssid
-            authFailed = false
-            pwInput.text = ""
-            Qt.callLater(pwInput.forceActiveFocus)
-        } else {
-            runConnect(ssid, "")
+        if (isSecured(net) && savedConns.indexOf(ssid) < 0) openPrompt(ssid, false)
+        else runConnect(ssid, "")
+    }
+
+    function failMessage() {
+        return pendingEnterprise ? "Couldn't sign in — check username and password"
+                                 : "Wrong password — try again"
+    }
+
+    function openPrompt(ssid, failed) {
+        const net = networks.find(n => n.ssid === ssid)
+        pendingSsid = ssid
+        pendingEnterprise = isEnterprise(net)
+        pwInput.text = ""
+        userInput.text = ""
+        authFailed = failed
+        failText = failed ? failMessage() : ""
+        if (pendingEnterprise && savedConns.indexOf(ssid) >= 0) {
+            // retrying a saved profile: pull the username back out of it so
+            // only the password needs retyping.
+            identityProc.command = ["nmcli", "-g", "802-1x.identity", "connection", "show", "id", ssid]
+            identityProc.running = true
         }
+        Qt.callLater(() => (root.pendingEnterprise ? userInput : pwInput).forceActiveFocus())
     }
 
     function runConnect(ssid, password) {
         let cmd = ["nmcli", "device", "wifi", "connect", ssid]
         if (password) cmd = cmd.concat(["password", password])
+        attemptSsid = ssid
         wifiConnectProc.command = cmd
         connecting = true
         wifiConnectProc.running = true
     }
 
+    // WPA-Enterprise: `nmcli device wifi connect … password` only knows PSKs,
+    // so write (or, on retry, rewrite) a PEAP/MSCHAPv2 profile and bring it
+    // up. That pairing is what nearly every campus/office network wants —
+    // ubcsecure, eduroam and ubcoprivate included. The password is stored in
+    // the profile (system-owned) so autoconnect works without a secret agent.
+    function runConnectEnterprise(ssid, user, password) {
+        const eap = ["wifi-sec.key-mgmt", "wpa-eap",
+                     "802-1x.eap", "peap", "802-1x.phase2-auth", "mschapv2",
+                     "802-1x.identity", user, "802-1x.password", password]
+        const exists = savedConns.indexOf(ssid) >= 0
+        entProfileProc.command = exists
+            ? ["nmcli", "connection", "modify", "id", ssid].concat(eap)
+            : ["nmcli", "connection", "add", "type", "wifi", "con-name", ssid, "ssid", ssid].concat(eap)
+        attemptSsid = ssid
+        connecting = true
+        entProfileProc.running = true
+    }
+
     function submitPassword() {
         if (!pwInput.text) return
-        runConnect(pendingSsid, pwInput.text)
+        if (pendingEnterprise) {
+            if (!userInput.text) { userInput.forceActiveFocus(); return }
+            runConnectEnterprise(pendingSsid, userInput.text, pwInput.text)
+        } else {
+            runConnect(pendingSsid, pwInput.text)
+        }
     }
 
     function cancelPassword() {
         pendingSsid = ""
+        pendingEnterprise = false
+        attemptSsid = ""
         pwInput.text = ""
+        userInput.text = ""
         authFailed = false
+        failText = ""
         connecting = false
         root.returnFocus()
     }
@@ -165,17 +222,65 @@ Item {
         running: false
         onExited: (code, status) => {
             connecting = false
+            const tried = attemptSsid
+            attemptSsid = ""
             if (code === 0) {
                 pendingSsid = ""
+                pendingEnterprise = false
                 pwInput.text = ""
+                userInput.text = ""
+                authFailed = false
+                failText = ""
                 root.returnFocus()
             } else if (pendingSsid) {
-                // nmcli exited non-zero while a password was pending — almost
-                // always a bad passphrase. keep the field up so they can retry.
+                // nmcli exited non-zero while credentials were pending — almost
+                // always a bad passphrase. keep the fields up so they can retry.
                 authFailed = true
+                failText = failMessage()
+            } else if (tried && isEnterprise(networks.find(n => n.ssid === tried))) {
+                // one-click connect to a saved enterprise profile failed —
+                // usually a changed/expired password. offer to re-enter it.
+                openPrompt(tried, true)
             }
+            // a failed attempt still leaves a profile behind; keep savedConns
+            // honest so the enterprise retry takes the `modify` path.
+            savedProc.running = true
             wifiListProc.running = true
             root.connectionChanged()
+        }
+    }
+
+    // step 1 of an enterprise connect: write the profile. step 2 brings it up
+    // through wifiConnectProc so success/failure handling stays in one place.
+    Process {
+        id: entProfileProc
+        running: false
+        onExited: (code, status) => {
+            if (code !== 0) {
+                connecting = false
+                attemptSsid = ""
+                authFailed = true
+                failText = "Couldn't save the network profile"
+                savedProc.running = true
+                return
+            }
+            wifiConnectProc.command = ["nmcli", "connection", "up", "id", attemptSsid]
+            wifiConnectProc.running = true
+        }
+    }
+
+    // reads the saved username of an enterprise profile for the retry prompt.
+    Process {
+        id: identityProc
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const id = text.trim()
+                if (id && root.pendingEnterprise && !userInput.text) {
+                    userInput.text = id
+                    if (userInput.activeFocus) pwInput.forceActiveFocus()
+                }
+            }
         }
     }
 
@@ -386,10 +491,60 @@ Item {
 
             Text {
                 width: parent.width
-                text: "Password for " + root.pendingSsid
+                text: (root.pendingEnterprise ? "Sign in to " : "Password for ") + root.pendingSsid
                 color: Theme.textPrimary
                 font.pixelSize: 12
                 elide: Text.ElideRight
+            }
+
+            // username — enterprise (802.1X) networks only
+            Rectangle {
+                visible: root.pendingEnterprise
+                width: parent.width
+                height: 34
+                radius: 9
+                color: Theme.rowHover
+                border.width: 1
+                border.color: root.authFailed ? Theme.danger
+                    : (userInput.activeFocus ? Theme.accent : Theme.divider)
+
+                TextInput {
+                    id: userInput
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.textBright
+                    font.pixelSize: 13
+                    selectionColor: Theme.accent
+                    selectedTextColor: Theme.onAccent
+                    clip: true
+                    enabled: !root.connecting
+
+                    onTextChanged: root.authFailed = false
+
+                    Keys.onPressed: (e) => {
+                        if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Tab) {
+                            // Tab moves on to the password; Enter does too,
+                            // unless both fields are filled — then it submits.
+                            if (e.key !== Qt.Key_Tab && pwInput.text && userInput.text) root.submitPassword()
+                            else pwInput.forceActiveFocus()
+                            e.accepted = true
+                        } else if (e.key === Qt.Key_Escape) {
+                            root.cancelPassword(); e.accepted = true
+                        }
+                    }
+
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: "Username"
+                        color: Theme.textMuted
+                        font: userInput.font
+                        visible: userInput.text.length === 0
+                    }
+                }
             }
 
             Rectangle {
@@ -423,13 +578,16 @@ Item {
                             root.submitPassword(); e.accepted = true
                         } else if (e.key === Qt.Key_Escape) {
                             root.cancelPassword(); e.accepted = true
+                        } else if (root.pendingEnterprise && (e.key === Qt.Key_Tab || e.key === Qt.Key_Backtab)) {
+                            userInput.forceActiveFocus(); e.accepted = true
                         }
                     }
 
                     Text {
                         anchors.fill: parent
                         verticalAlignment: Text.AlignVCenter
-                        text: root.connecting ? "Connecting…" : "Enter password"
+                        text: root.connecting ? "Connecting…"
+                            : (root.pendingEnterprise ? "Password" : "Enter password")
                         color: Theme.textMuted
                         font: pwInput.font
                         visible: pwInput.text.length === 0
@@ -459,7 +617,7 @@ Item {
 
             Text {
                 visible: root.authFailed
-                text: "Wrong password — try again"
+                text: root.failText || "Wrong password — try again"
                 color: Theme.danger
                 font.pixelSize: 10
             }
@@ -468,7 +626,7 @@ Item {
         Text {
             visible: root.pendingSsid === ""
             width: parent.width
-            text: "Click to connect, right-click for more. Secured networks ask for a password."
+            text: "Click to connect, right-click for more. Secured networks ask for a password, enterprise (802.1X) ones for a username too."
             color: Theme.textMuted
             font.pixelSize: 10
             wrapMode: Text.WordWrap
