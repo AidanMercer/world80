@@ -22,6 +22,12 @@ QtObject {
     property string fontMono: Tokens.DEFAULTS.font_mono
     property string barPosition: Tokens.DEFAULTS.bar_position
 
+    // the Super+` scratchpad tracker (see Scratchpad.qml): `.count` windows in
+    // it, `.id` (its negative workspace id, 0 while it doesn't exist), `.shown`
+    // (monitor name → true while it's up there), `.toggle()`. Bars ride it as
+    // slot 0 of their workspace strip.
+    readonly property var scratchpad: Scratchpad
+
     // per-machine shrink: the laptop's eDP-1 panel makes the desktop widgets
     // read too big; the desktop has no eDP-1 so it stays 1.0. On top of that
     // sits the user's global interface scale (Settings → Interface scale), so
