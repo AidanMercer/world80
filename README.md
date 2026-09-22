@@ -91,6 +91,7 @@ rebuilds the initramfs — the theme is baked in there, so rerun it after editin
 | `Super+S` | frostify now-playing |
 | `Super+L` / `Super+Shift+S` | lock · screenshot region |
 | `Super+1–5` · `Super+arrows` | workspaces · focus windows |
+| ``Super+` `` / ``Super+Shift+` `` | scratchpad overlay · send window in / pull it out |
 
 Full list lives in `Super+/`.
 

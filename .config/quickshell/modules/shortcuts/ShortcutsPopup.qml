@@ -252,7 +252,9 @@ PanelWindow {
                 { keys: ["Super", "Scroll"],          desc: "Cycle this monitor" },
                 { keys: ["Super", "Ctrl", "← →"],     desc: "Prev / next" },
                 { keys: ["Super", "Ctrl", "Shift", "← →"], desc: "Carry window" },
-                { keys: ["Super", "Alt", "← →"],      desc: "Move split seam" }
+                { keys: ["Super", "Alt", "← →"],      desc: "Move split seam" },
+                { keys: ["Super", "`"],                desc: "Scratchpad" },
+                { keys: ["Super", "Shift", "`"],       desc: "Send to scratchpad" }
             ]}
         ]
         ]
