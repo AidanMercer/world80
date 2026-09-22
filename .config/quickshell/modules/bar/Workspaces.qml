@@ -29,14 +29,6 @@ Item {
         ? Math.floor((activeWsId - 1) / wsCount) * wsCount + 1
         : 1
 
-    // The Super+` scratchpad rides in front of workspace 1 as slot 0 while it
-    // holds windows — same slot chrome, it's a workspace that floats over the
-    // others. Lit while it's showing on this monitor; click toggles it.
-    readonly property bool scratchOn: Scratchpad.count > 0
-    readonly property var slotIds: (scratchOn ? [Scratchpad.id] : [])
-        .concat(Array.from({ length: wsCount }, (_, i) => pageBase + i))
-    readonly property string monName: monitor?.name ?? ""
-
     readonly property int slotSize: 22
     readonly property int slotSpacing: 4
 
@@ -99,20 +91,17 @@ Item {
     Grid {
         id: wsRow
         anchors.centerIn: parent
-        columns: root.vertical ? 1 : root.slotIds.length
+        columns: root.vertical ? 1 : root.wsCount
         spacing: root.slotSpacing
 
         Repeater {
-            model: root.slotIds
+            model: root.wsCount
 
             delegate: Item {
                 id: slot
                 required property int index
-                required property var modelData
-                readonly property int wsId: modelData      // < 0 = the scratchpad
-                readonly property bool isActive: wsId < 0
-                    ? Scratchpad.shown[root.monName] === true
-                    : root.activeWsId === wsId
+                readonly property int wsId: root.pageBase + index
+                readonly property bool isActive: root.activeWsId === wsId
 
                 readonly property var windowsHere: Hyprland.toplevels.values
                     .filter(t => (t.workspace?.id ?? -1) === wsId)
@@ -151,7 +140,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Hyprland.dispatch(slot.wsId < 0 ? "togglespecialworkspace scratchpad" : `workspace ${slot.wsId}`)
+                    onClicked: Hyprland.dispatch(`workspace ${slot.wsId}`)
                 }
             }
         }
