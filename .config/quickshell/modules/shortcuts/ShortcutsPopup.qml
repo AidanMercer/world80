@@ -33,7 +33,7 @@ PanelWindow {
     property int tab: 0                  // 0 = Shortcuts, 1 = Settings, 2 = Marketplace, 3 = Extensions
     readonly property int tabCount: 4
     property int settingsRow: 0          // cursor within the Settings tab
-    readonly property int settingsCount: 3 + themeSlots.length
+    readonly property int settingsCount: 5 + themeSlots.length
 
     // ── marketplace ─────────────────────────────────────────────────────
     // Browse + download themes straight from the author's GitHub. The source
@@ -979,8 +979,10 @@ PanelWindow {
                         if (root.settingsRow === 0) root.setKeepAwake(!root.keepAwake)
                         else if (root.settingsRow === 1) root.setAutoLock(!root.autoLock)
                         else if (root.settingsRow === 2) OverviewSettings.toggle()
-                        else if (root.settingsRow - 3 < root.themeSlots.length)
-                            ThemeSettings.toggle(root.themeDirNow, root.themeSlots[root.settingsRow - 3].slot)
+                        else if (root.settingsRow === 3) PowerMode.toggle()
+                        else if (root.settingsRow === 4) PowerMode.setAuto(!PowerMode.auto)
+                        else if (root.settingsRow - 5 < root.themeSlots.length)
+                            ThemeSettings.toggle(root.themeDirNow, root.themeSlots[root.settingsRow - 5].slot)
                         e.accepted = true; return
                     }
                     e.accepted = true   // swallow stray keys instead of closing
@@ -1612,6 +1614,142 @@ PanelWindow {
                         }
                     }
 
+                    // row 3 — low power mode
+                    Rectangle {
+                        width: parent.width
+                        height: 56
+                        radius: 10
+                        opacity: PowerMode.available ? 1 : 0.5
+                        color: root.settingsRow === 3 ? Theme.rowSelected
+                                                      : (powerHover.hovered ? Theme.rowHover : "transparent")
+                        border.color: root.settingsRow === 3 ? Theme.glassBorder : "transparent"
+                        border.width: 1
+
+                        HoverHandler { id: powerHover }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { root.settingsRow = 3; PowerMode.toggle() }
+                        }
+
+                        Column {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 16
+                            anchors.right: powerToggle.left
+                            anchors.rightMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+
+                            Text {
+                                text: "Low power mode"
+                                color: Theme.textBright
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                width: parent.width
+                                text: !PowerMode.available ? "power-profiles-daemon isn't running."
+                                    : PowerMode.lowPower ? "Power saver — slower CPU, quieter fans, longer battery."
+                                    : "Currently " + PowerMode.profile + "."
+                                color: Theme.textMuted
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            id: powerToggle
+                            anchors.right: parent.right
+                            anchors.rightMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 44
+                            height: 24
+                            radius: 12
+                            color: PowerMode.lowPower ? Theme.accent : Theme.trackBg
+                            border.color: PowerMode.lowPower ? Theme.accent : Theme.glassBorder
+                            border.width: 1
+                            Behavior on color { ColorAnimation { duration: 140 } }
+
+                            Rectangle {
+                                width: 18
+                                height: 18
+                                radius: 9
+                                color: PowerMode.lowPower ? Theme.textBright : Theme.textMuted
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: PowerMode.lowPower ? parent.width - width - 3 : 3
+                                Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                Behavior on color { ColorAnimation { duration: 140 } }
+                            }
+                        }
+                    }
+
+                    // row 4 — auto low power on battery
+                    Rectangle {
+                        width: parent.width
+                        height: 56
+                        radius: 10
+                        opacity: true ? 1 : 0.5
+                        color: root.settingsRow === 4 ? Theme.rowSelected
+                                                      : (powerAutoHover.hovered ? Theme.rowHover : "transparent")
+                        border.color: root.settingsRow === 4 ? Theme.glassBorder : "transparent"
+                        border.width: 1
+
+                        HoverHandler { id: powerAutoHover }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { root.settingsRow = 4; PowerMode.setAuto(!PowerMode.auto) }
+                        }
+
+                        Column {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 16
+                            anchors.right: powerAutoToggle.left
+                            anchors.rightMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+
+                            Text {
+                                text: "Auto low power on battery"
+                                color: Theme.textBright
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                width: parent.width
+                                text: "Power saver when unplugged or under " + PowerMode.lowPct + "%, back when you plug in."
+                                color: Theme.textMuted
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            id: powerAutoToggle
+                            anchors.right: parent.right
+                            anchors.rightMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 44
+                            height: 24
+                            radius: 12
+                            color: PowerMode.auto ? Theme.accent : Theme.trackBg
+                            border.color: PowerMode.auto ? Theme.accent : Theme.glassBorder
+                            border.width: 1
+                            Behavior on color { ColorAnimation { duration: 140 } }
+
+                            Rectangle {
+                                width: 18
+                                height: 18
+                                radius: 9
+                                color: PowerMode.auto ? Theme.textBright : Theme.textMuted
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: PowerMode.auto ? parent.width - width - 3 : 3
+                                Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                Behavior on color { ColorAnimation { duration: 140 } }
+                            }
+                        }
+                    }
+
                     // ── per-theme widget toggles ──
                     Item {
                         width: parent.width
@@ -1645,7 +1783,7 @@ PanelWindow {
                             id: slotRow
                             required property int index
                             required property var modelData
-                            readonly property int rowIdx: 3 + index
+                            readonly property int rowIdx: 5 + index
                             readonly property bool isOn: ThemeSettings.on(root.themeDirNow, modelData.slot)
 
                             width: parent.width

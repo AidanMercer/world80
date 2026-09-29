@@ -21,7 +21,7 @@ Scope {
     readonly property var source: Pipewire.defaultAudioSource
 
     // what the popup is currently showing
-    property string kind: "volume"   // "volume" | "mic" | "brightness"
+    property string kind: "volume"   // "volume" | "mic" | "brightness" | "power"
     property real value: 0           // 0..1
     property bool muted: false
 
@@ -101,6 +101,23 @@ Scope {
         onTriggered: win.visible = false
     }
 
+    property string powerLabel: ""
+    Connections {
+        target: PowerMode
+        function onChanged(profile, reason) {
+            const name = profile === "power-saver" ? "Low power" : profile === "performance" ? "Performance" : "Balanced"
+            const why = reason === "unplugged" ? " · on battery"
+                      : reason === "plugged" ? " · plugged in"
+                      : reason === "low" ? " · battery " + PowerMode.batteryPercent + "%"
+                      : ""
+            root.kind = "power"
+            root.value = 0
+            root.muted = false
+            root.powerLabel = name + why
+            root.flash()
+        }
+    }
+
     IpcHandler {
         target: "osd"
         function volumeUp(): void { root.volumeUp() }
@@ -146,6 +163,10 @@ Scope {
 
         readonly property string glyph: {
             if (root.kind === "brightness") return String.fromCodePoint(0xF00E0)        // brightness
+            if (root.kind === "power")
+                return String.fromCodePoint(PowerMode.lowPower ? 0xF032A                // leaf
+                                          : PowerMode.profile === "performance" ? 0xF0463  // rocket
+                                          : 0xF04C5)                                    // speedometer
             if (root.kind === "mic")
                 return String.fromCodePoint(root.muted ? 0xF036D : 0xF036C)             // mic / mic-off
             if (root.muted || root.value < 0.001) return String.fromCodePoint(0xF075F)  // volume mute
@@ -193,9 +214,25 @@ Scope {
                 font.pixelSize: 14
                 color: Theme.textPrimary
                 text: Math.round(root.value * 100) + "%"
+                visible: root.kind !== "power"
+            }
+
+            Text {
+                visible: root.kind === "power"
+                anchors.left: ico.right
+                anchors.leftMargin: 14
+                anchors.right: parent.right
+                anchors.rightMargin: 18
+                anchors.verticalCenter: parent.verticalCenter
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+                color: Theme.textBright
+                elide: Text.ElideRight
+                text: root.powerLabel
             }
 
             Rectangle {
+                visible: root.kind !== "power"
                 anchors.left: ico.right
                 anchors.leftMargin: 14
                 anchors.right: pct.left

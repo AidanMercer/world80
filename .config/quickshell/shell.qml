@@ -234,6 +234,21 @@ ShellRoot {
         function get(): string { return String(UiScale.factor) }
     }
 
+    // low power mode — also keeps PowerMode alive from startup so auto works
+    // without the settings sheet ever opening
+    //   qs ipc call power toggle / set power-saver / auto / get
+    IpcHandler {
+        target: "power"
+        function toggle(): void { PowerMode.toggle() }
+        function set(p: string): void { PowerMode.setManual(p) }
+        function auto(): void { PowerMode.setAuto(!PowerMode.auto) }
+        function get(): string {
+            return PowerMode.profile + (PowerMode.onBattery ? " battery " : " ac ")
+                 + PowerMode.batteryPercent + "% auto=" + PowerMode.auto
+                 + " restore=" + PowerMode.restore + " low=" + PowerMode.lowLatched
+        }
+    }
+
     // Re-read the active theme's config.toml whenever the wallpaper changes.
     Connections {
         target: ControlBus

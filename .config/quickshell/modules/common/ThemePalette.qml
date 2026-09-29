@@ -40,6 +40,9 @@ QtObject {
     // readout doesn't leave a dead button behind. Re-evaluates live.
     readonly property bool sysinfoOn: ThemeSettings.on(pal.themeDir, "sysinfo")
 
+    // power-saver profile active — bars can tint their battery with it
+    readonly property bool lowPower: PowerMode.lowPower
+
     function apply(t) {
         neon = t.accent
         cyan = t.accent2

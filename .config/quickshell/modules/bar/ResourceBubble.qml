@@ -251,5 +251,13 @@ Item {
             critAt: 15
             charging: root.batteryCharging
         }
+        Text {
+            visible: root.hasBattery && PowerMode.lowPower
+            anchors.verticalCenter: parent.verticalCenter
+            text: String.fromCodePoint(0xF032A)   // nf-md-leaf
+            font.family: Theme.icon
+            font.pixelSize: 13
+            color: Theme.accent
+        }
     }
 }
